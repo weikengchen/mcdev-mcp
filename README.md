@@ -10,6 +10,8 @@ An **MCP (Model Context Protocol) server** that empowers AI coding agents to wor
 - **Decompiled Source Access** — Auto-downloads and decompiles Minecraft client using official Mojang mappings
 - **Symbol Search** — Search for classes, methods, and fields by name
 - **Source Retrieval** — Get full class source or individual methods with context
+- **Package Exploration** — List all classes under a package path or discover available packages
+- **Class Hierarchy** — Find subclasses and interface implementors
 - **Call Graph Analysis** — Find method callers and callees across the entire codebase
 - **Zero Configuration** — Works out of the box with any MCP-compatible AI tool
 
@@ -91,6 +93,44 @@ Find who calls a method (callers) or what it calls (callees).
 
 > **Note:** Requires running `node dist/cli.js callgraph` first.
 
+### `mc_list_classes`
+List all classes under a specific package path (includes subpackages).
+
+```json
+{
+  "packagePath": "net.minecraft.client.gui.screens"
+}
+```
+
+### `mc_list_packages`
+List all available packages. Optionally filter by namespace.
+
+```json
+{
+  "namespace": "minecraft"
+}
+```
+
+| Namespace | Description |
+|-----------|-------------|
+| `minecraft` | Minecraft client classes |
+| `fabric` | Fabric API classes (if indexed) |
+
+### `mc_find_hierarchy`
+Find classes that extend or implement a given class or interface.
+
+```json
+{
+  "className": "net.minecraft.world.entity.Entity",
+  "direction": "subclasses"
+}
+```
+
+| Direction | Description |
+|-----------|-------------|
+| `subclasses` | Classes that extend this class |
+| `implementors` | Classes that implement this interface |
+
 ## CLI Commands
 
 | Command | Description |
@@ -135,12 +175,15 @@ mcdev-mcp/
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                      mcdev-mcp Server                        │
-│  ┌─────────┐  ┌──────────┐  ┌──────────┐  ┌───────────┐    │
-│  │ search  │  │get_class │  │get_method│  │ find_refs │    │
-│  └────┬────┘  └────┬─────┘  └────┬─────┘  └─────┬─────┘    │
-│       └────────────┴────────────┴───────────────┘          │
-│                           │                                  │
-│       ┌───────────────────┴───────────────────┐             │
+│  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐       │
+│  │ search  │ │get_class │ │get_method│ │ find_refs │       │
+│  └────┬────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘       │
+│  ┌─────────────┐ ┌───────────────┐ ┌─────────────────┐     │
+│  │list_classes │ │list_packages  │ │ find_hierarchy  │     │
+│  └──────┬──────┘ └───────┬───────┘ └────────┬────────┘     │
+│         └────────────────┼──────────────────┘              │
+│                          │                                  │
+│       ┌──────────────────┴───────────────────┐             │
 │       ▼                                       ▼             │
 │  ┌──────────┐                          ┌─────────────┐      │
 │  │  Index   │                          │  Callgraph  │      │
