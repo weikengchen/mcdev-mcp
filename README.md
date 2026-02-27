@@ -1,6 +1,6 @@
 # mcdev-mcp
 
-[![CI](https://github.com/anomalyco/mcdev-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/anomalyco/mcdev-mcp/actions/workflows/ci.yml)
+[![CI](https://github.com/weikengchen/mcdev-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/weikengchen/mcdev-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 An **MCP (Model Context Protocol) server** that empowers AI coding agents to work effectively with Minecraft mod development. Provides accurate, up-to-date access to decompiled Minecraft source code using official Mojang mappings.
@@ -17,7 +17,7 @@ An **MCP (Model Context Protocol) server** that empowers AI coding agents to wor
 
 ```bash
 # Clone and install
-git clone https://github.com/anomalyco/mcdev-mcp.git
+git clone https://github.com/weikengchen/mcdev-mcp.git
 cd mcdev-mcp
 npm install
 npm run build
@@ -29,21 +29,8 @@ node dist/cli.js init
 node dist/cli.js callgraph
 ```
 
-### Add to Your AI Tool
+### Add to Your MCP Client
 
-**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-```json
-{
-  "mcpServers": {
-    "mcdev": {
-      "command": "node",
-      "args": ["/path/to/mcdev-mcp/dist/index.js"]
-    }
-  }
-}
-```
-
-**Cursor / Other MCP clients**:
 ```json
 {
   "mcpServers": {
