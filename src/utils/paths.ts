@@ -81,3 +81,18 @@ export function ensureHomeDirs(): void {
   ensureDir(getMinecraftIndexPath());
   ensureDir(getFabricIndexPath());
 }
+
+export function getAvailableMinecraftVersions(): string[] {
+  const cacheDir = getCacheDir();
+  if (!fs.existsSync(cacheDir)) return [];
+  
+  const versions: string[] = [];
+  for (const entry of fs.readdirSync(cacheDir)) {
+    const sourceDir = getMinecraftSourceDir(entry);
+    if (fs.existsSync(sourceDir)) {
+      versions.push(entry);
+    }
+  }
+  
+  return versions.sort();
+}

@@ -190,6 +190,140 @@ export const mcGetMethodTool = {
   },
 };
 
+export const mcListClassesTool = {
+  name: 'mc_list_classes',
+  description: 'List all classes under a specific package path. Returns class names and their source locations. Use this to discover classes in a package hierarchy.',
+  inputSchema: {
+    type: 'object' as const,
+    properties: {
+      packagePath: {
+        type: 'string',
+        description: 'Package path to list classes from (e.g., "net.minecraft.client", "net.minecraft.world.entity"). Matches exact package and all subpackages.',
+      },
+    },
+    required: ['packagePath'],
+  },
+  
+  handler: async (args: { packagePath: string }) => {
+    await ensureInitialized();
+    
+    const results = sourceStore.listClasses(args.packagePath);
+    
+    if (results.length === 0) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `No classes found under package "${args.packagePath}"`,
+        }],
+      };
+    }
+    
+    const output = results
+      .map(r => `${r.className}`)
+      .join('\n');
+    
+    const summary = results.length > 200 
+      ? `\n... and ${results.length - 200} more (total: ${results.length})`
+      : `\nTotal: ${results.length} class(es)`;
+    
+    return {
+      content: [{
+        type: 'text' as const,
+        text: `Classes under "${args.packagePath}":\n${results.slice(0, 200).map(r => r.className).join('\n')}${summary}`,
+      }],
+    };
+  },
+};
+
+export const mcListPackagesTool = {
+  name: 'mc_list_packages',
+  description: 'List all available packages. Optionally filter by namespace (minecraft or fabric). Use this to discover package structure.',
+  inputSchema: {
+    type: 'object' as const,
+    properties: {
+      namespace: {
+        type: 'string',
+        enum: ['minecraft', 'fabric'],
+        description: 'Optional: filter by namespace (minecraft or fabric)',
+      },
+    },
+    required: [],
+  },
+  
+  handler: async (args: { namespace?: 'minecraft' | 'fabric' }) => {
+    await ensureInitialized();
+    
+    const results = sourceStore.listPackages(args.namespace);
+    
+    if (results.length === 0) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: 'No packages found',
+        }],
+      };
+    }
+    
+    return {
+      content: [{
+        type: 'text' as const,
+        text: `Found ${results.length} package(s):\n${results.join('\n')}`,
+      }],
+    };
+  },
+};
+
+export const mcFindHierarchyTool = {
+  name: 'mc_find_hierarchy',
+  description: 'Find classes that extend (subclasses) or implement (implementors) a given class or interface. Useful for understanding class inheritance relationships.',
+  inputSchema: {
+    type: 'object' as const,
+    properties: {
+      className: {
+        type: 'string',
+        description: 'Fully qualified class or interface name (e.g., "net.minecraft.world.entity.Entity", "net.minecraft.world.item.Item")',
+      },
+      direction: {
+        type: 'string',
+        enum: ['subclasses', 'implementors'],
+        description: 'subclasses = classes that extend this class, implementors = classes that implement this interface',
+      },
+    },
+    required: ['className', 'direction'],
+  },
+  
+  handler: async (args: { className: string; direction: 'subclasses' | 'implementors' }) => {
+    await ensureInitialized();
+    
+    const results = sourceStore.findHierarchy(args.className, args.direction);
+    
+    if (results.length === 0) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `No ${args.direction} found for ${args.className}`,
+        }],
+      };
+    }
+    
+    const output = results
+      .slice(0, 200)
+      .map(r => r.className)
+      .join('\n');
+    
+    const summary = results.length > 200 
+      ? `\n... and ${results.length - 200} more (total: ${results.length})`
+      : `\nTotal: ${results.length} ${args.direction}`;
+    
+    return {
+      content: [{
+        type: 'text' as const,
+        text: `${args.direction === 'subclasses' ? 'Subclasses' : 'Implementors'} of ${args.className}:\n${output}${summary}`,
+      }],
+    };
+  },
+};
+
 export const mcFindRefsTool = {
   name: 'mc_find_refs',
   description: 'Find callers (who calls this method) or callees (what this method calls) using the callgraph database. Useful for understanding code dependencies.',
@@ -256,4 +390,4 @@ export const mcFindRefsTool = {
   },
 };
 
-export const allTools = [mcSearchTool, mcGetClassTool, mcGetMethodTool, mcFindRefsTool];
+export const allTools = [mcSearchTool, mcGetClassTool, mcGetMethodTool, mcFindRefsTool, mcListClassesTool, mcListPackagesTool, mcFindHierarchyTool];

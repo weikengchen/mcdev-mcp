@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
+import * as fs from 'fs';
 import { Command } from 'commander';
 import { ensureDecompiled } from './decompiler/index.js';
 import { buildIndex, loadIndexManifest } from './indexer/index.js';
-import { getMinecraftSourceDir, ensureHomeDirs, getHomeDir } from './utils/paths.js';
+import { getMinecraftSourceDir, ensureHomeDirs, getHomeDir, getAvailableMinecraftVersions } from './utils/paths.js';
 import { ensureCallgraph, hasCallgraphDb, getCallgraphStats } from './callgraph/index.js';
 
 const DEFAULT_MC_VERSION = '1.21.11';
@@ -76,27 +77,51 @@ program
 program
   .command('rebuild')
   .description('Rebuild the symbol index from cached sources')
-  .action(async () => {
+  .option('-v, --version <version>', 'Minecraft version (auto-detected if not specified)')
+  .action(async (options) => {
     ensureHomeDirs();
     
-    const manifest = loadIndexManifest();
-    if (!manifest) {
-      console.error('No existing index found. Run `init` first.');
+    let minecraftVersion = options.version;
+    
+    if (!minecraftVersion) {
+      const manifest = loadIndexManifest();
+      const availableVersions = getAvailableMinecraftVersions();
+      
+      if (manifest && availableVersions.includes(manifest.minecraftVersion)) {
+        minecraftVersion = manifest.minecraftVersion;
+      } else if (availableVersions.length === 1) {
+        minecraftVersion = availableVersions[0];
+        console.log(`Auto-detected Minecraft version: ${minecraftVersion}`);
+      } else if (availableVersions.length > 1) {
+        console.log('Available Minecraft versions:', availableVersions.join(', '));
+        console.error('Please specify a version with -v');
+        process.exit(1);
+      } else {
+        console.error('No cached Minecraft sources found. Run `init` first.');
+        process.exit(1);
+      }
+    }
+    
+    console.log(`Rebuilding index for Minecraft ${minecraftVersion}...`);
+    
+    const minecraftDir = getMinecraftSourceDir(minecraftVersion);
+    
+    if (!fs.existsSync(minecraftDir)) {
+      console.error(`Source directory not found: ${minecraftDir}`);
+      console.error('Run `init` first to download and decompile sources.');
       process.exit(1);
     }
     
-    console.log(`Rebuilding index for Minecraft ${manifest.minecraftVersion}...`);
-    
-    const minecraftDir = getMinecraftSourceDir(manifest.minecraftVersion);
+    const progressCb = (stage: string, progress: number, message: string) => {
+      console.log(`[${stage}] ${progress}% - ${message}`);
+    };
     
     await buildIndex({
       minecraftSourceDir: minecraftDir,
       fabricApiSourceDir: null,
-      minecraftVersion: manifest.minecraftVersion,
-      fabricApiVersion: manifest.fabricApiVersion,
-      progressCb: (stage, progress, message) => {
-        console.log(`[${stage}] ${progress}% - ${message}`);
-      },
+      minecraftVersion: minecraftVersion,
+      fabricApiVersion: null,
+      progressCb,
     });
     
     console.log('\n✓ Index rebuilt!');

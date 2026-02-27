@@ -31,6 +31,91 @@ export class SourceStore {
     return this.getManifest()?.fabricApiVersion || null;
   }
   
+  listClasses(packagePath: string): { className: string; simpleName: string; sourcePath: string }[] {
+    const manifest = this.getManifest();
+    if (!manifest) return [];
+    
+    const results: { className: string; simpleName: string; sourcePath: string }[] = [];
+    const packageLower = packagePath.toLowerCase();
+    
+    const namespaces: Array<'minecraft' | 'fabric'> = ['minecraft', 'fabric'];
+    
+    for (const namespace of namespaces) {
+      const packages = namespace === 'minecraft' ? manifest.packages.minecraft : manifest.packages.fabric;
+      
+      for (const packageName of packages) {
+        if (packageName.toLowerCase() === packageLower || packageName.toLowerCase().startsWith(packageLower + '.')) {
+          const pkgIndex = this.getPackage(namespace, packageName);
+          if (!pkgIndex) continue;
+          
+          for (const [simpleName, classInfo] of Object.entries(pkgIndex.classes)) {
+            results.push({
+              className: `${packageName}.${simpleName}`,
+              simpleName,
+              sourcePath: this.resolveSourcePath(classInfo.sourcePath, namespace),
+            });
+          }
+        }
+      }
+    }
+    
+    return results;
+  }
+  
+  listPackages(namespace?: 'minecraft' | 'fabric'): string[] {
+    const manifest = this.getManifest();
+    if (!manifest) return [];
+    
+    if (namespace) {
+      return namespace === 'minecraft' ? manifest.packages.minecraft : manifest.packages.fabric;
+    }
+    
+    return [...manifest.packages.minecraft, ...manifest.packages.fabric];
+  }
+  
+  findHierarchy(
+    className: string,
+    direction: 'subclasses' | 'implementors'
+  ): { className: string; sourcePath: string }[] {
+    const manifest = this.getManifest();
+    if (!manifest) return [];
+    
+    const results: { className: string; sourcePath: string }[] = [];
+    
+    const namespaces: Array<'minecraft' | 'fabric'> = ['minecraft', 'fabric'];
+    
+    for (const namespace of namespaces) {
+      const packages = namespace === 'minecraft' ? manifest.packages.minecraft : manifest.packages.fabric;
+      
+      for (const packageName of packages) {
+        const pkgIndex = this.getPackage(namespace, packageName);
+        if (!pkgIndex) continue;
+        
+        for (const [simpleName, classInfo] of Object.entries(pkgIndex.classes)) {
+          const fullName = `${packageName}.${simpleName}`;
+          
+          if (direction === 'subclasses') {
+            if (classInfo.super === className) {
+              results.push({
+                className: fullName,
+                sourcePath: this.resolveSourcePath(classInfo.sourcePath, namespace),
+              });
+            }
+          } else if (direction === 'implementors') {
+            if (classInfo.interfaces && classInfo.interfaces.includes(className)) {
+              results.push({
+                className: fullName,
+                sourcePath: this.resolveSourcePath(classInfo.sourcePath, namespace),
+              });
+            }
+          }
+        }
+      }
+    }
+    
+    return results;
+  }
+  
   search(query: string, type?: 'class' | 'method' | 'field'): SearchResult[] {
     const manifest = this.getManifest();
     if (!manifest) return [];
