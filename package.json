@@ -1,0 +1,58 @@
+{
+  "name": "mcdev-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Minecraft mod development - provides decompiled code access and symbol search",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mcdev-mcp": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "minecraft",
+    "mcp",
+    "fabric",
+    "modding",
+    "decompiler",
+    "model-context-protocol",
+    "ai",
+    "llm"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anomalyco/mcdev-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/anomalyco/mcdev-mcp/issues"
+  },
+  "homepage": "https://github.com/anomalyco/mcdev-mcp#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "axios": "^1.6.0",
+    "better-sqlite3": "^12.6.2",
+    "commander": "^12.0.0",
+    "glob": "^10.0.0",
+    "unzipper": "^0.12.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.10.0",
+    "@types/unzipper": "^0.10.10",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
