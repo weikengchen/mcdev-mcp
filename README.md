@@ -187,6 +187,24 @@ npm run lint     # Lint code
 - **Single Version**: Currently supports Minecraft 1.21.11 only
 - **Client Only**: Server-side classes are not included
 
+## Legal Notice
+
+This tool decompiles Minecraft source code for development reference purposes. Please respect Mojang's intellectual property:
+
+**You MAY:**
+- Decompile and study the code for understanding and learning
+- Use the knowledge to develop mods that don't contain substantial Mojang code
+- Reference class/method names for mod development
+
+**You may NOT:**
+- Distribute decompiled source code
+- Distribute modified versions of Minecraft
+- Use decompiled code commercially without permission
+
+Per the [Minecraft EULA](https://www.minecraft.net/eula): *"You may not distribute any Modded Versions of our game or software"* and *"Mods are okay to distribute; hacked versions or Modded Versions of the game client or server software are not okay to distribute."*
+
+This tool is for **reference only** — do not copy decompiled code directly into your projects.
+
 ## Credits
 
 - [DecompilerMC](https://github.com/hube12/DecompilerMC) — Minecraft decompilation with official mappings

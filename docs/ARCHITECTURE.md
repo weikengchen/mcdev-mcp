@@ -7,7 +7,7 @@ mcdev-mcp is an MCP (Model Context Protocol) server that provides AI coding agen
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        MCP Client (AI Agent)                         │
-│                    Claude, Cursor, Continue, etc.                    │
+│                  Any MCP-compatible AI coding tool                   │
 └─────────────────────────────────────────────────────────────────────┘
                                    │
                                    │ MCP Protocol (JSON-RPC)
