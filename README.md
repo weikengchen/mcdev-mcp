@@ -13,9 +13,11 @@ An **MCP (Model Context Protocol) server** that empowers AI coding agents to wor
 - **Package Exploration** — List all classes under a package path or discover available packages
 - **Class Hierarchy** — Find subclasses and interface implementors
 - **Call Graph Analysis** — Find method callers and callees across the entire codebase
-- **Zero Configuration** — Works out of the box with any MCP-compatible AI tool
+- **Zero Configuration** — Auto-initializes on first use if sources are cached
 
 ## Quick Start
+
+### Installation
 
 ```bash
 # Clone and install
@@ -23,11 +25,25 @@ git clone https://github.com/weikengchen/mcdev-mcp.git
 cd mcdev-mcp
 npm install
 npm run build
+```
 
-# Initialize (downloads & decompiles ~50MB)
+### Initialize
+
+```bash
+# Download, decompile, and index Minecraft sources (~2-5 minutes)
 node dist/cli.js init
+```
 
-# Generate callgraph for find_refs (optional, ~3 minutes)
+This command:
+1. Clones [DecompilerMC](https://github.com/hube12/DecompilerMC)
+2. Downloads the Minecraft client JAR and Mojang mappings
+3. Decompiles with official mappings
+4. Builds the symbol index (classes, methods, fields, inheritance)
+
+### (Optional) Generate Call Graph
+
+```bash
+# Required only for mc_find_refs tool (~3 minutes)
 node dist/cli.js callgraph
 ```
 
@@ -44,7 +60,27 @@ node dist/cli.js callgraph
 }
 ```
 
+### Verify Installation
+
+```bash
+node dist/cli.js status
+```
+
+> **Note:** The MCP server auto-initializes on first tool call if sources exist. Running `init` manually is recommended to pre-download sources and avoid delays during first use.
+
 ## MCP Tools
+
+### Tool Requirements
+
+| Tool | Requires `init` | Requires `callgraph` |
+|------|-----------------|---------------------|
+| `mc_search` | ✓ | - |
+| `mc_get_class` | ✓ | - |
+| `mc_get_method` | ✓ | - |
+| `mc_list_classes` | ✓ | - |
+| `mc_list_packages` | ✓ | - |
+| `mc_find_hierarchy` | ✓ | - |
+| `mc_find_refs` | ✓ | ✓ |
 
 ### `mc_search`
 Search for Minecraft classes, methods, or fields by name pattern.
@@ -131,15 +167,6 @@ Find classes that extend or implement a given class or interface.
 | `subclasses` | Classes that extend this class |
 | `implementors` | Classes that implement this interface |
 
-## CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `init` | Download, decompile, and index Minecraft sources |
-| `callgraph` | Generate call graph for `mc_find_refs` |
-| `status` | Show initialization status |
-| `rebuild` | Rebuild the symbol index |
-
 ## Requirements
 
 | Dependency | Version | Purpose |
@@ -149,6 +176,17 @@ Find classes that extend or implement a given class or interface.
 | Java | 8+ | Decompilation & callgraph |
 | Git | any | Clone dependencies |
 | ~2GB | disk | Decompiled sources + cache |
+
+> **Note:** Java 17+ is recommended for the `callgraph` command due to Gradle compatibility.
+
+## CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `init` | Download, decompile, and index Minecraft sources |
+| `callgraph` | Generate call graph for `mc_find_refs` |
+| `status` | Show initialization status |
+| `rebuild` | Rebuild the symbol index from cached sources |
 
 ## Architecture
 
