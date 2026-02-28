@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 import * as fs from 'fs';
+import * as path from 'path';
 import { Command } from 'commander';
 import { ensureDecompiled } from './decompiler/index.js';
 import { buildIndex, loadIndexManifest } from './indexer/index.js';
-import { getMinecraftSourceDir, ensureHomeDirs, getHomeDir, getAvailableMinecraftVersions } from './utils/paths.js';
+import { getMinecraftSourceDir, ensureHomeDirs, getHomeDir, getAvailableMinecraftVersions, getCacheDir, getIndexDir, getMinecraftCacheDir } from './utils/paths.js';
 import { ensureCallgraph, hasCallgraphDb, getCallgraphStats } from './callgraph/index.js';
 
 const DEFAULT_MC_VERSION = '1.21.11';
@@ -162,8 +163,64 @@ program
   .command('clean')
   .description('Remove cached data and index')
   .option('--callgraph', 'Only clean callgraph data')
+  .option('--cache', 'Clean cache directory (decompiled sources)')
+  .option('--index', 'Clean index directory (symbol index)')
+  .option('--all', 'Clean everything (cache, index)')
   .action((options) => {
-    console.log('Clean command not yet implemented.');
+    const homeDir = getHomeDir();
+    const cacheDir = getCacheDir();
+    const indexDir = getIndexDir();
+    
+    if (options.callgraph) {
+      const manifest = loadIndexManifest();
+      if (manifest) {
+        const version = manifest.minecraftVersion;
+        const callgraphDir = path.join(getMinecraftCacheDir(version), 'callgraph');
+        if (fs.existsSync(callgraphDir)) {
+          fs.rmSync(callgraphDir, { recursive: true });
+          console.log(`Removed callgraph data for ${version}`);
+        } else {
+          console.log('No callgraph data found');
+        }
+      } else {
+        console.log('No initialized version found');
+      }
+      return;
+    }
+    
+    if (options.all) {
+      options.cache = true;
+      options.index = true;
+    }
+    
+    if (!options.cache && !options.index) {
+      console.log('Specify what to clean:');
+      console.log('  --cache     Clean decompiled sources');
+      console.log('  --index     Clean symbol index');
+      console.log('  --callgraph Clean callgraph database only');
+      console.log('  --all       Clean everything');
+      return;
+    }
+    
+    if (options.cache) {
+      if (fs.existsSync(cacheDir)) {
+        fs.rmSync(cacheDir, { recursive: true });
+        console.log(`Removed cache: ${cacheDir}`);
+      } else {
+        console.log('Cache directory not found');
+      }
+    }
+    
+    if (options.index) {
+      if (fs.existsSync(indexDir)) {
+        fs.rmSync(indexDir, { recursive: true });
+        console.log(`Removed index: ${indexDir}`);
+      } else {
+        console.log('Index directory not found');
+      }
+    }
+    
+    console.log('\nRun `mcdev-mcp init` to reinitialize.');
   });
 
 program.parse();

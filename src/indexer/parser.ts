@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { ClassInfo, FieldInfo, MethodInfo } from '../utils/types.js';
+import { ClassInfo, FieldInfo, MethodInfo, ClassKind } from '../utils/types.js';
 
 export interface ParsedClass {
   packageName: string;
@@ -25,7 +25,9 @@ export function parseJavaContent(content: string, filePath: string): ParsedClass
   
   const fullName = packageName ? `${packageName}.${className}` : className;
   
-  const classMatch = content.match(/(?:public|protected|private)?\s*(?:abstract|final)?\s*class\s+(\w+)(?:\s+extends\s+([^{<\s]+))?(?:\s+implements\s+([^{{]+))?\s*\{/);
+  const kind = extractClassKind(content);
+  
+  const classMatch = content.match(/(?:public|protected|private)?\s*(?:abstract|final)?\s*(?:class|interface|enum)\s+(\w+)(?:\s+extends\s+([^{<\s]+))?(?:\s+implements\s+([^{{]+))?\s*\{/);
   
   if (!classMatch) return null;
   
@@ -44,6 +46,7 @@ export function parseJavaContent(content: string, filePath: string): ParsedClass
     className,
     fullName,
     info: {
+      kind,
       super: superClass,
       interfaces,
       fields,
@@ -60,8 +63,18 @@ function extractPackage(content: string): string {
 }
 
 function extractClassName(content: string): string | null {
-  const match = content.match(/(?:public\s+)?(?:abstract\s+|final\s+)?class\s+(\w+)/);
+  const match = content.match(/(?:public\s+)?(?:abstract\s+|final\s+)?(?:class|interface|enum)\s+(\w+)/);
   return match ? match[1] : null;
+}
+
+function extractClassKind(content: string): ClassKind {
+  if (/(?:public\s+)?(?:abstract\s+|final\s+)?interface\s+\w+/.test(content)) {
+    return 'interface';
+  }
+  if (/(?:public\s+)?(?:abstract\s+|final\s+)?enum\s+\w+/.test(content)) {
+    return 'enum';
+  }
+  return 'class';
 }
 
 function cleanTypeName(type: string): string {
