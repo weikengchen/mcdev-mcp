@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { buildIndex, loadPackageIndex } from '../src/indexer/index.js';
-import { parseJavaContent } from '../src/indexer/parser.js';
 
 describe('Index Builder', () => {
   const tempDir = path.join(os.tmpdir(), 'mcdev-mcp-test-' + Date.now());

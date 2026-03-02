@@ -15,32 +15,69 @@ export function parseJavaFile(filePath: string): ParsedClass | null {
   return parseJavaContent(content, filePath);
 }
 
+function extractDeclarationBlock(content: string): string | null {
+  const match = content.match(
+    /(?:public|protected|private)?\s*(?:abstract|final|sealed)?\s*(?:class|interface|enum|record)\s+\w+[^{]*\{/s
+  );
+  return match ? match[0] : null;
+}
+
+function parseDeclaration(block: string): {
+  className: string | null;
+  kind: ClassKind;
+  superClass: string | null;
+  interfaces: string[];
+} {
+  const normalized = block.replace(/\s+/g, ' ').trim();
+
+  const nameMatch = normalized.match(/(?:class|interface|enum|record)\s+(\w+)/);
+  const className = nameMatch ? nameMatch[1] : null;
+
+  let kind: ClassKind = 'class';
+  if (/\binterface\b/.test(normalized)) kind = 'interface';
+  else if (/\benum\b/.test(normalized)) kind = 'enum';
+  else if (/\brecord\b/.test(normalized)) kind = 'record';
+
+  let superClass: string | null = null;
+  let interfaces: string[] = [];
+
+  if (kind === 'interface') {
+    const extendsMatch = normalized.match(/extends\s+([^{]+)/);
+    if (extendsMatch) {
+      interfaces = extendsMatch[1].split(',').map(s => cleanTypeName(s.trim())).filter(s => s);
+    }
+  } else {
+    const extendsMatch = normalized.match(/extends\s+([^\s{<,]+(?:<[^>]+>)?)/);
+    superClass = extendsMatch ? cleanTypeName(extendsMatch[1]) : null;
+
+    const implementsMatch = normalized.match(/implements\s+([^{]+)/);
+    if (implementsMatch) {
+      interfaces = implementsMatch[1].split(',').map(s => cleanTypeName(s.trim())).filter(s => s);
+    }
+  }
+
+  return { className, kind, superClass, interfaces };
+}
+
 export function parseJavaContent(content: string, filePath: string): ParsedClass | null {
   const lines = content.split('\n');
-  
+
   const packageName = extractPackage(content);
-  const className = extractClassName(content);
-  
+  const declBlock = extractDeclarationBlock(content);
+
+  if (!declBlock) return null;
+
+  const { className, kind, superClass, interfaces } = parseDeclaration(declBlock);
+
   if (!className) return null;
-  
+
   const fullName = packageName ? `${packageName}.${className}` : className;
-  
-  const kind = extractClassKind(content);
-  
-  const classMatch = content.match(/(?:public|protected|private)?\s*(?:abstract|final)?\s*(?:class|interface|enum)\s+(\w+)(?:\s+extends\s+([^{<\s]+))?(?:\s+implements\s+([^{{]+))?\s*\{/);
-  
-  if (!classMatch) return null;
-  
-  const superClass = classMatch[2] ? cleanTypeName(classMatch[2]) : null;
-  const interfaces = classMatch[3] 
-    ? classMatch[3].split(',').map(s => cleanTypeName(s.trim())).filter(s => s)
-    : [];
-  
+
   const fields = extractFields(content, lines);
   const methods = extractMethods(content, lines);
-  
+
   const relativePath = filePath.replace(/\\/g, '/');
-  
+
   return {
     packageName,
     className,
@@ -62,23 +99,8 @@ function extractPackage(content: string): string {
   return match ? match[1] : '';
 }
 
-function extractClassName(content: string): string | null {
-  const match = content.match(/(?:public\s+)?(?:abstract\s+|final\s+)?(?:class|interface|enum)\s+(\w+)/);
-  return match ? match[1] : null;
-}
-
-function extractClassKind(content: string): ClassKind {
-  if (/(?:public\s+)?(?:abstract\s+|final\s+)?interface\s+\w+/.test(content)) {
-    return 'interface';
-  }
-  if (/(?:public\s+)?(?:abstract\s+|final\s+)?enum\s+\w+/.test(content)) {
-    return 'enum';
-  }
-  return 'class';
-}
-
 function cleanTypeName(type: string): string {
-  return type.replace(/[<>\[\]]/g, '').replace(/\s+/g, '').split('.')[0] || type;
+  return type.replace(/<.*>/, '').replace(/[\[\]]/g, '').replace(/\s+/g, '').trim().split('.')[0] || type;
 }
 
 function extractFields(content: string, lines: string[]): FieldInfo[] {

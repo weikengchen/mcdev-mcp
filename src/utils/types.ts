@@ -50,7 +50,7 @@ export interface PackageIndex {
   classes: Record<string, ClassInfo>;
 }
 
-export type ClassKind = 'class' | 'interface' | 'enum';
+export type ClassKind = 'class' | 'interface' | 'enum' | 'record';
 
 export interface ClassInfo {
   kind: ClassKind;

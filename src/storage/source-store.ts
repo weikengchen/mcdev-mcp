@@ -1,26 +1,50 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { loadIndexManifest, loadPackageIndex } from '../indexer/index.js';
 import { 
   getMinecraftSourceDir, 
   getFabricApiCacheDir,
-  getIndexManifestPath 
+  getVersionedIndexManifestPath,
+  getVersionedPackageIndexPath,
+  isVersionIndexed
 } from '../utils/paths.js';
 import { SearchResult, PackageIndex, ClassInfo, MethodInfo, IndexManifest } from '../utils/types.js';
 
 export class SourceStore {
+  private version: string | null = null;
   private manifest: IndexManifest | null = null;
   private packageCache: Map<string, PackageIndex> = new Map();
-  
-  private getManifest(): IndexManifest | null {
-    if (!this.manifest) {
-      this.manifest = loadIndexManifest();
+
+  setVersion(version: string): void {
+    if (this.version !== version) {
+      this.version = version;
+      this.manifest = null;
+      this.packageCache.clear();
     }
-    return this.manifest;
+  }
+
+  getVersion(): string | null {
+    return this.version;
+  }
+
+  isReady(): boolean {
+    if (!this.version) return false;
+    return isVersionIndexed(this.version);
   }
   
-  isReady(): boolean {
-    return fs.existsSync(getIndexManifestPath());
+  private getManifest(): IndexManifest | null {
+    if (!this.version) return null;
+    
+    if (!this.manifest) {
+      const manifestPath = getVersionedIndexManifestPath(this.version);
+      if (!fs.existsSync(manifestPath)) return null;
+      
+      try {
+        this.manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+      } catch {
+        return null;
+      }
+    }
+    return this.manifest;
   }
   
   getMinecraftVersion(): string | null {
@@ -264,12 +288,19 @@ export class SourceStore {
   }
   
   private getPackage(namespace: 'minecraft' | 'fabric', packageName: string): PackageIndex | null {
+    if (!this.version) return null;
+    
     const cacheKey = `${namespace}:${packageName}`;
     
     if (!this.packageCache.has(cacheKey)) {
-      const pkg = loadPackageIndex(namespace, packageName);
-      if (pkg) {
-        this.packageCache.set(cacheKey, pkg);
+      const indexPath = getVersionedPackageIndexPath(namespace, packageName, this.version);
+      if (fs.existsSync(indexPath)) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
+          this.packageCache.set(cacheKey, pkg);
+        } catch {
+          return null;
+        }
       }
     }
     
@@ -281,6 +312,8 @@ export class SourceStore {
       return storedPath;
     }
     
+    if (!this.version) return storedPath;
+    
     const manifest = this.getManifest();
     if (!manifest) return storedPath;
     
@@ -288,7 +321,7 @@ export class SourceStore {
       return path.join(getFabricApiCacheDir(manifest.fabricApiVersion), storedPath);
     }
     
-    return path.join(getMinecraftSourceDir(manifest.minecraftVersion), storedPath);
+    return path.join(getMinecraftSourceDir(this.version), storedPath);
   }
   
   private readSource(sourcePath: string): string | null {

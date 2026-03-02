@@ -31,20 +31,23 @@ npm run build
 
 ```bash
 # Download, decompile, and index Minecraft sources (~2-5 minutes)
-node dist/cli.js init
+node dist/cli.js init -v 1.21.1
 ```
 
 This command:
-1. Clones [DecompilerMC](https://github.com/hube12/DecompilerMC)
-2. Downloads the Minecraft client JAR and Mojang mappings
-3. Decompiles with official mappings
-4. Builds the symbol index (classes, methods, fields, inheritance)
+1. Downloads the Minecraft client JAR and Mojang mappings
+2. Decompiles with official mappings (uses modified DecompilerMC)
+3. Builds the symbol index (classes, methods, fields, inheritance)
+4. Generates call graph for `mc_find_refs`
 
-### (Optional) Generate Call Graph
+### (Optional) Skip Call Graph
 
 ```bash
-# Required only for mc_find_refs tool (~3 minutes)
-node dist/cli.js callgraph
+# Skip callgraph generation if you don't need mc_find_refs
+node dist/cli.js init -v 1.21.1 --skip-callgraph
+
+# Generate callgraph later
+node dist/cli.js callgraph -v 1.21.1
 ```
 
 ### Add to Your MCP Client
@@ -66,14 +69,36 @@ node dist/cli.js callgraph
 node dist/cli.js status
 ```
 
-> **Note:** The MCP server auto-initializes on first tool call if sources exist. Running `init` manually is recommended to pre-download sources and avoid delays during first use.
+> **Note:** The `mc_set_version` tool must be called before using any other MCP tools. If the version isn't initialized, the AI will be instructed to ask you to run `init`.
 
 ## MCP Tools
+
+### Version Management
+
+Before using any other tools, set the active Minecraft version:
+
+### `mc_set_version`
+Set the active Minecraft version for this session. Must be called before other tools.
+
+```json
+{
+  "version": "1.21.1"
+}
+```
+
+### `mc_list_versions`
+List all Minecraft versions that have been initialized.
+
+```json
+{}
+```
 
 ### Tool Requirements
 
 | Tool | Requires `init` | Requires `callgraph` |
 |------|-----------------|---------------------|
+| `mc_set_version` | - | - |
+| `mc_list_versions` | - | - |
 | `mc_search` | ✓ | - |
 | `mc_get_class` | ✓ | - |
 | `mc_get_method` | ✓ | - |
@@ -127,7 +152,7 @@ Find who calls a method (callers) or what it calls (callees).
 | `callers` | Find methods that call this method |
 | `callees` | Find methods this method calls |
 
-> **Note:** Requires running `node dist/cli.js callgraph` first.
+> **Note:** Requires callgraph to be generated (included in `init` by default).
 
 ### `mc_list_classes`
 List all classes under a specific package path (includes subpackages).
@@ -183,10 +208,11 @@ Find classes that extend or implement a given class or interface.
 
 | Command | Description |
 |---------|-------------|
-| `init` | Download, decompile, and index Minecraft sources |
-| `callgraph` | Generate call graph for `mc_find_refs` |
-| `status` | Show initialization status |
-| `rebuild` | Rebuild the symbol index from cached sources |
+| `init -v <version>` | Download, decompile, index Minecraft sources, and generate callgraph |
+| `callgraph -v <version>` | Generate call graph for `mc_find_refs` |
+| `status` | Show all initialized versions |
+| `rebuild -v <version>` | Rebuild the symbol index from cached sources |
+| `clean --all` | Clean all cached data |
 
 ## Architecture
 
@@ -200,6 +226,8 @@ mcdev-mcp/
 │   ├── indexer/              # Symbol index builder
 │   ├── callgraph/            # Call graph generation & queries
 │   └── storage/              # Source & index storage
+├── lib/
+│   └── DecompilerMC-main.py  # Modified DecompilerMC (supports dev snapshots)
 └── dist/                     # Compiled output
 ```
 
@@ -241,17 +269,15 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design documentati
 
 ```
 ~/.mcdev-mcp/
-├── DecompilerMC/              # DecompilerMC repository
+├── DecompilerMC/              # DecompilerMC repository (libs only)
 ├── java-callgraph2/           # Call graph tool
 ├── cache/
-│   └── 1.21.11/
-│       ├── client/            # Decompiled Minecraft sources
-│       └── callgraph/
-│           ├── callgraph.db   # SQLite call graph database
-│           └── client-remapped.jar
+│   └── {version}/
+│       └── client/            # Decompiled Minecraft sources
 └── index/
-    ├── manifest.json          # Index metadata
-    └── minecraft/             # Per-package symbol indices
+    └── {version}/
+        ├── manifest.json      # Index metadata
+        └── minecraft/         # Per-package symbol indices
 ```
 
 ## Development
@@ -265,7 +291,6 @@ npm run lint     # Lint code
 ## Limitations
 
 - **Static Analysis Only**: `mc_find_refs` cannot trace calls through reflection, JNI callbacks, or lambda/method references created dynamically
-- **Single Version**: Currently supports Minecraft 1.21.11 only
 - **Client Only**: Server-side classes are not included
 
 ## Legal Notice
@@ -286,12 +311,19 @@ Per the [Minecraft EULA](https://www.minecraft.net/eula): *"You may not distribu
 
 This tool is for **reference only** — do not copy decompiled code directly into your projects.
 
-## Credits
+## Third-Party Components
 
-- [DecompilerMC](https://github.com/hube12/DecompilerMC) — Minecraft decompilation with official mappings
-- [java-callgraph2](https://github.com/Adrninistrator/java-callgraph2) — Static call graph generation
-- [Mojang](https://www.minecraft.net/) — Official ProGuard mappings
+This project includes modified code from third-party projects:
+
+- **[DecompilerMC](https://github.com/hube12/DecompilerMC)** (MIT) — `lib/DecompilerMC-main.py` is a modified version that supports unobfuscated dev snapshots
+- **[java-callgraph2](https://github.com/Adrninistrator/java-callgraph2)** — Cloned at runtime for static call graph generation
+
+Additional runtime dependencies (downloaded/used):
+- **[Mojang](https://www.minecraft.net/)** — Official ProGuard mappings and Minecraft client JAR
+- **CFR** and **FernFlower** decompilers (bundled with DecompilerMC)
+
+See [LICENSE](LICENSE) for full license text and third-party attributions.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) — Copyright (c) 2025 mcdev-mcp contributors

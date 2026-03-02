@@ -25,3 +25,10 @@ coverage/
 
 # Cache (user-specific)
 .mcdev-mcp/
+
+# Decompiler artifacts (should be in ~/.mcdev-mcp/)
+lib/__pycache__/
+lib/mappings/
+lib/src/
+lib/tmp/
+lib/versions/

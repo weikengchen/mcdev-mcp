@@ -87,6 +87,15 @@ export async function ensureRemappedJar(version: string, progressCb?: ProgressCa
   const tsrgMappings = path.join(dmcdDir, 'mappings', version, 'client.tsrg');
   const specialSource = path.join(dmcdDir, 'lib', `SpecialSource-${SPECIAL_SOURCE_VERSION}.jar`);
   
+  // For dev snapshots (no mappings), use client.jar directly
+  if (!fs.existsSync(tsrgMappings)) {
+    if (progressCb) progressCb('remap', 0, 'No mappings found, using unobfuscated jar directly...');
+    ensureDir(path.dirname(remappedJar));
+    fs.copyFileSync(clientJar, remappedJar);
+    if (progressCb) progressCb('remap', 100, 'Jar ready (no remapping needed).');
+    return remappedJar;
+  }
+  
   if (progressCb) progressCb('remap', 0, 'Creating remapped jar...');
   ensureDir(path.dirname(remappedJar));
   

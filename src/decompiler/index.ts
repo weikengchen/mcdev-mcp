@@ -2,8 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import { getHomeDir, getMinecraftSourceDir, ensureHomeDirs, ensureDir } from '../utils/paths.js';
+import { fileURLToPath } from 'url';
 
 const DECOMPILER_MC_DIR = path.join(getHomeDir(), 'DecompilerMC');
+
+function getProjectRoot(): string {
+  const __filename = fileURLToPath(import.meta.url);
+  return path.dirname(path.dirname(path.dirname(__filename)));
+}
 
 export interface DecompilerStatus {
   hasMinecraftSources: boolean;
@@ -21,15 +27,15 @@ export function isDecompiled(version: string): boolean {
   return javaFiles.length > 100;
 }
 
-async function checkDecompilerMC(): Promise<boolean> {
-  if (fs.existsSync(path.join(DECOMPILER_MC_DIR, 'main.py'))) {
-    return true;
-  }
-  return false;
+const REQUIRED_LIBS = ['cfr-0.152.jar', 'fernflower.jar', 'SpecialSource-1.11.4.jar'];
+
+function hasDecompilerMCLibs(): boolean {
+  const libDir = path.join(DECOMPILER_MC_DIR, 'lib');
+  return REQUIRED_LIBS.every(jar => fs.existsSync(path.join(libDir, jar)));
 }
 
 async function cloneDecompilerMC(progressCb?: (stage: string, progress: number, message: string) => void): Promise<void> {
-  if (await checkDecompilerMC()) return;
+  if (hasDecompilerMCLibs()) return;
   
   if (progressCb) {
     progressCb('decompiler-mc', 0, 'Cloning DecompilerMC...');
@@ -68,12 +74,22 @@ async function runDecompilerMC(
     return outputDir;
   }
   
+  const ourMainPy = path.join(getProjectRoot(), 'lib', 'DecompilerMC-main.py');
+  const libDir = path.join(DECOMPILER_MC_DIR, 'lib');
+  
   if (progressCb) {
     progressCb('decompile', 0, `Decompiling Minecraft ${version} (this takes 1-3 minutes)...`);
   }
   
   return new Promise((resolve, reject) => {
-    const proc = spawn('python3', ['main.py', '--mcversion', version, '--side', 'client', '-q'], {
+    const proc = spawn('python3', [
+      ourMainPy,
+      '--mcversion', version,
+      '--side', 'client',
+      '--lib-dir', libDir,
+      '--decompiler', 'fernflower',
+      '-q'
+    ], {
       cwd: DECOMPILER_MC_DIR,
       stdio: 'inherit',
     });

@@ -96,3 +96,58 @@ export function getAvailableMinecraftVersions(): string[] {
   
   return versions.sort();
 }
+
+export function getVersionedIndexDir(version: string): string {
+  return path.join(getIndexDir(), version);
+}
+
+export function getVersionedIndexManifestPath(version: string): string {
+  return path.join(getVersionedIndexDir(version), 'manifest.json');
+}
+
+export function getVersionedMinecraftIndexPath(version: string): string {
+  return path.join(getVersionedIndexDir(version), 'minecraft');
+}
+
+export function getVersionedFabricIndexPath(version: string): string {
+  return path.join(getVersionedIndexDir(version), 'fabric');
+}
+
+export function getVersionedPackageIndexPath(
+  namespace: 'minecraft' | 'fabric',
+  packageName: string,
+  version: string
+): string {
+  const baseDir = namespace === 'minecraft'
+    ? getVersionedMinecraftIndexPath(version)
+    : getVersionedFabricIndexPath(version);
+  return path.join(baseDir, `${packageName}.json`);
+}
+
+export function isVersionIndexed(version: string): boolean {
+  const manifestPath = getVersionedIndexManifestPath(version);
+  return fs.existsSync(manifestPath);
+}
+
+export function getIndexedVersions(): string[] {
+  const indexDir = getIndexDir();
+  if (!fs.existsSync(indexDir)) return [];
+  
+  const versions: string[] = [];
+  for (const entry of fs.readdirSync(indexDir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      const manifestPath = getVersionedIndexManifestPath(entry.name);
+      if (fs.existsSync(manifestPath)) {
+        versions.push(entry.name);
+      }
+    }
+  }
+  
+  return versions.sort();
+}
+
+export function ensureVersionedIndexDirs(version: string): void {
+  ensureDir(getVersionedIndexDir(version));
+  ensureDir(getVersionedMinecraftIndexPath(version));
+  ensureDir(getVersionedFabricIndexPath(version));
+}

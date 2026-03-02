@@ -4,11 +4,9 @@ import { glob } from 'glob';
 import { PackageIndex, IndexManifest, ClassInfo } from '../utils/types.js';
 import { parseJavaFile, ParsedClass } from './parser.js';
 import { 
-  getIndexManifestPath, 
-  getMinecraftIndexPath, 
-  getFabricIndexPath, 
-  getPackageIndexPath,
-  ensureDir 
+  getVersionedIndexManifestPath,
+  getVersionedPackageIndexPath,
+  ensureVersionedIndexDirs
 } from '../utils/paths.js';
 
 export interface BuildIndexOptions {
@@ -28,8 +26,7 @@ export interface IndexBuildResult {
 export async function buildIndex(options: BuildIndexOptions): Promise<IndexBuildResult> {
   const { minecraftSourceDir, fabricApiSourceDir, minecraftVersion, fabricApiVersion, progressCb } = options;
   
-  ensureDir(getMinecraftIndexPath());
-  ensureDir(getFabricIndexPath());
+  ensureVersionedIndexDirs(minecraftVersion);
   
   if (progressCb) progressCb('index', 0, 'Finding Java files...');
   
@@ -72,8 +69,8 @@ export async function buildIndex(options: BuildIndexOptions): Promise<IndexBuild
   
   if (progressCb) progressCb('index', 90, 'Writing package indices...');
   
-  await writePackageIndices('minecraft', minecraftPackages);
-  await writePackageIndices('fabric', fabricPackages);
+  await writePackageIndices('minecraft', minecraftPackages, minecraftVersion);
+  await writePackageIndices('fabric', fabricPackages, minecraftVersion);
   
   const manifest: IndexManifest = {
     minecraftVersion,
@@ -85,7 +82,8 @@ export async function buildIndex(options: BuildIndexOptions): Promise<IndexBuild
     },
   };
   
-  fs.writeFileSync(getIndexManifestPath(), JSON.stringify(manifest, null, 2));
+  const manifestPath = getVersionedIndexManifestPath(minecraftVersion);
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
   
   let totalClasses = 0;
   for (const pkg of minecraftPackages.values()) {
@@ -135,7 +133,8 @@ function addToPackageIndex(
 
 async function writePackageIndices(
   namespace: 'minecraft' | 'fabric',
-  packages: Map<string, Record<string, ClassInfo>>
+  packages: Map<string, Record<string, ClassInfo>>,
+  version: string
 ): Promise<void> {
   for (const [packageName, classes] of packages) {
     const packageIndex: PackageIndex = {
@@ -143,15 +142,18 @@ async function writePackageIndices(
       classes,
     };
     
-    const indexPath = getPackageIndexPath(namespace, packageName);
-    ensureDir(path.dirname(indexPath));
+    const indexPath = getVersionedPackageIndexPath(namespace, packageName, version);
+    const dir = path.dirname(indexPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     fs.writeFileSync(indexPath, JSON.stringify(packageIndex, null, 2));
   }
 }
 
-export function loadIndexManifest(): IndexManifest | null {
-  const manifestPath = getIndexManifestPath();
-  if (!fs.existsSync(manifestPath)) return null;
+export function loadIndexManifest(version?: string): IndexManifest | null {
+  const manifestPath = getVersionedIndexManifestPath(version || '');
+  if (!version || !fs.existsSync(manifestPath)) return null;
   
   try {
     return JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
@@ -160,8 +162,14 @@ export function loadIndexManifest(): IndexManifest | null {
   }
 }
 
-export function loadPackageIndex(namespace: 'minecraft' | 'fabric', packageName: string): PackageIndex | null {
-  const indexPath = getPackageIndexPath(namespace, packageName);
+export function loadPackageIndex(
+  namespace: 'minecraft' | 'fabric',
+  packageName: string,
+  version?: string
+): PackageIndex | null {
+  if (!version) return null;
+  
+  const indexPath = getVersionedPackageIndexPath(namespace, packageName, version);
   if (!fs.existsSync(indexPath)) return null;
   
   try {

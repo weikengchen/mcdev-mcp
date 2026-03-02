@@ -5,12 +5,47 @@ import * as path from 'path';
 import { Command } from 'commander';
 import { ensureDecompiled } from './decompiler/index.js';
 import { buildIndex, loadIndexManifest } from './indexer/index.js';
-import { getMinecraftSourceDir, ensureHomeDirs, getHomeDir, getAvailableMinecraftVersions, getCacheDir, getIndexDir, getMinecraftCacheDir } from './utils/paths.js';
+import { 
+  getMinecraftSourceDir, 
+  ensureHomeDirs, 
+  getHomeDir, 
+  getAvailableMinecraftVersions, 
+  getCacheDir, 
+  getIndexDir, 
+  getMinecraftCacheDir,
+  getIndexedVersions,
+  isVersionIndexed
+} from './utils/paths.js';
 import { ensureCallgraph, hasCallgraphDb, getCallgraphStats } from './callgraph/index.js';
 
-const DEFAULT_MC_VERSION = '1.21.11';
-
 const program = new Command();
+
+function isValidVersion(version: string): boolean {
+  // Allow 26.x, 27.x, etc. (including snapshots like 26.1-snapshot-10)
+  if (/^[2-9][0-9]*\./.test(version)) {
+    return true;
+  }
+  
+  // For 1.x.x versions, require >= 1.21.11
+  const match = version.match(/^1\.(\d+)\.(\d+)/);
+  if (match) {
+    const minor = parseInt(match[1], 10);
+    const patch = parseInt(match[2], 10);
+    return minor > 21 || (minor === 21 && patch >= 11);
+  }
+  
+  return false;
+}
+
+function validateVersion(version: string): void {
+  if (!isValidVersion(version)) {
+    console.error(`Error: Version ${version} is not supported.`);
+    console.error('Supported versions:');
+    console.error('  - 1.21.11 and later (1.21.11, 1.21.12, 1.22.x, etc.)');
+    console.error('  - 26.x and later (26.1, 26.1-snapshot-10, etc.)');
+    process.exit(1);
+  }
+}
 
 program
   .name('mcdev-mcp')
@@ -19,9 +54,11 @@ program
 
 program
   .command('init')
-  .description('Download and decompile Minecraft sources, build index')
-  .option('-v, --version <version>', 'Minecraft version', DEFAULT_MC_VERSION)
+  .description('Download, decompile, index Minecraft sources, and generate callgraph')
+  .requiredOption('-v, --version <version>', 'Minecraft version (e.g., 1.21.11, 26.1)')
+  .option('--skip-callgraph', 'Skip callgraph generation', false)
   .action(async (options) => {
+    validateVersion(options.version);
     console.log(`Initializing mcdev-mcp for Minecraft ${options.version}...`);
     
     const progressCb = (stage: string, progress: number, message: string) => {
@@ -40,8 +77,21 @@ program
         progressCb,
       });
       
+      if (!options.skipCallgraph) {
+        console.log('\nGenerating callgraph...');
+        await ensureCallgraph(options.version, progressCb);
+      }
+      
       console.log('\n✓ Initialization complete!');
       console.log(`  Minecraft: ${options.version}`);
+      if (options.skipCallgraph) {
+        console.log(`  Callgraph: skipped (run 'mcdev-mcp callgraph -v ${options.version}' to generate)`);
+      } else {
+        const stats = getCallgraphStats(options.version);
+        if (stats) {
+          console.log(`  Callgraph: ${stats.totalCalls} call references`);
+        }
+      }
     } catch (error) {
       console.error('Initialization failed:', error);
       process.exit(1);
@@ -51,9 +101,21 @@ program
 program
   .command('callgraph')
   .description('Generate callgraph database for finding method references')
-  .option('-v, --version <version>', 'Minecraft version', DEFAULT_MC_VERSION)
+  .requiredOption('-v, --version <version>', 'Minecraft version (e.g., 1.21.11, 26.1)')
   .action(async (options) => {
+    validateVersion(options.version);
     console.log(`Generating callgraph for Minecraft ${options.version}...`);
+    
+    const sourceDir = getMinecraftSourceDir(options.version);
+    if (!fs.existsSync(sourceDir)) {
+      console.error(`Minecraft ${options.version} not decompiled. Run 'init -v ${options.version}' first.`);
+      process.exit(1);
+    }
+    
+    if (!isVersionIndexed(options.version)) {
+      console.error(`Minecraft ${options.version} not indexed. Run 'init -v ${options.version}' first.`);
+      process.exit(1);
+    }
     
     const progressCb = (stage: string, progress: number, message: string) => {
       console.log(`[${stage}] ${progress}% - ${message}`);
@@ -78,33 +140,13 @@ program
 program
   .command('rebuild')
   .description('Rebuild the symbol index from cached sources')
-  .option('-v, --version <version>', 'Minecraft version (auto-detected if not specified)')
+  .requiredOption('-v, --version <version>', 'Minecraft version (e.g., 1.21.11, 26.1)')
+  .option('--with-callgraph', 'Also rebuild callgraph', false)
   .action(async (options) => {
+    validateVersion(options.version);
     ensureHomeDirs();
     
-    let minecraftVersion = options.version;
-    
-    if (!minecraftVersion) {
-      const manifest = loadIndexManifest();
-      const availableVersions = getAvailableMinecraftVersions();
-      
-      if (manifest && availableVersions.includes(manifest.minecraftVersion)) {
-        minecraftVersion = manifest.minecraftVersion;
-      } else if (availableVersions.length === 1) {
-        minecraftVersion = availableVersions[0];
-        console.log(`Auto-detected Minecraft version: ${minecraftVersion}`);
-      } else if (availableVersions.length > 1) {
-        console.log('Available Minecraft versions:', availableVersions.join(', '));
-        console.error('Please specify a version with -v');
-        process.exit(1);
-      } else {
-        console.error('No cached Minecraft sources found. Run `init` first.');
-        process.exit(1);
-      }
-    }
-    
-    console.log(`Rebuilding index for Minecraft ${minecraftVersion}...`);
-    
+    const minecraftVersion = options.version;
     const minecraftDir = getMinecraftSourceDir(minecraftVersion);
     
     if (!fs.existsSync(minecraftDir)) {
@@ -112,6 +154,8 @@ program
       console.error('Run `init` first to download and decompile sources.');
       process.exit(1);
     }
+    
+    console.log(`Rebuilding index for Minecraft ${minecraftVersion}...`);
     
     const progressCb = (stage: string, progress: number, message: string) => {
       console.log(`[${stage}] ${progress}% - ${message}`);
@@ -125,39 +169,94 @@ program
       progressCb,
     });
     
+    if (options.withCallgraph) {
+      console.log('\nRebuilding callgraph...');
+      await ensureCallgraph(minecraftVersion, progressCb);
+    }
+    
     console.log('\n✓ Index rebuilt!');
   });
 
 program
   .command('status')
-  .description('Show current status')
-  .action(() => {
+  .description('Show current status of all cached Minecraft versions')
+  .option('-v, --version <version>', 'Show status for specific version')
+  .action((options) => {
     ensureHomeDirs();
     
-    const manifest = loadIndexManifest();
+    const indexedVersions = getIndexedVersions();
+    const cachedVersions = getAvailableMinecraftVersions();
     
-    if (!manifest) {
-      console.log('Status: Not initialized');
-      console.log('Run `mcdev-mcp init` to set up.');
+    if (options.version) {
+      showVersionStatus(options.version, cachedVersions, indexedVersions);
       return;
     }
     
-    console.log('Status: Initialized');
-    console.log(`  Minecraft version: ${manifest.minecraftVersion}`);
-    if (manifest.fabricApiVersion) {
-      console.log(`  Fabric API version: ${manifest.fabricApiVersion}`);
+    if (cachedVersions.length === 0) {
+      console.log('Status: Not initialized');
+      console.log('Run `mcdev-mcp init -v <version>` to set up.');
+      return;
     }
-    console.log(`  Minecraft packages: ${manifest.packages.minecraft.length}`);
-    console.log(`  Fabric packages: ${manifest.packages.fabric.length}`);
-    console.log(`  Index generated: ${manifest.generated}`);
     
-    const callgraphStats = getCallgraphStats(manifest.minecraftVersion);
-    if (callgraphStats) {
-      console.log(`\n  Callgraph: ${callgraphStats.totalCalls} call references`);
-    } else {
-      console.log(`\n  Callgraph: not generated (run 'mcdev-mcp callgraph')`);
+    console.log('Cached Minecraft versions:\n');
+    
+    for (const version of cachedVersions) {
+      const manifest = loadIndexManifest(version);
+      const hasCallgraph = hasCallgraphDb(version);
+      const isIndexed = indexedVersions.includes(version);
+      
+      console.log(`  ${version}:`);
+      console.log(`    Decompiled: ✓`);
+      console.log(`    Indexed: ${isIndexed ? '✓' : '✗'}`);
+      
+      if (isIndexed && manifest) {
+        console.log(`    Packages: ${manifest.packages.minecraft.length} Minecraft, ${manifest.packages.fabric.length} Fabric`);
+      }
+      
+      console.log(`    Callgraph: ${hasCallgraph ? '✓' : '✗'}`);
+      
+      if (hasCallgraph) {
+        const stats = getCallgraphStats(version);
+        if (stats) {
+          console.log(`    Call refs: ${stats.totalCalls}`);
+        }
+      }
+      
+      console.log();
     }
+    
+    console.log(`Total: ${cachedVersions.length} version(s) cached`);
   });
+
+function showVersionStatus(version: string, cachedVersions: string[], indexedVersions: string[]): void {
+  const isCached = cachedVersions.includes(version);
+  const isIndexed = indexedVersions.includes(version);
+  const hasCallgraph = hasCallgraphDb(version);
+  
+  console.log(`\nMinecraft ${version}:`);
+  console.log(`  Decompiled: ${isCached ? '✓' : '✗'}`);
+  console.log(`  Indexed: ${isIndexed ? '✓' : '✗'}`);
+  console.log(`  Callgraph: ${hasCallgraph ? '✓' : '✗'}`);
+  
+  if (isIndexed) {
+    const manifest = loadIndexManifest(version);
+    if (manifest) {
+      console.log(`  Packages: ${manifest.packages.minecraft.length} Minecraft, ${manifest.packages.fabric.length} Fabric`);
+      console.log(`  Generated: ${manifest.generated}`);
+    }
+    
+    if (hasCallgraph) {
+      const stats = getCallgraphStats(version);
+      if (stats) {
+        console.log(`  Call refs: ${stats.totalCalls}`);
+        console.log(`  Unique callers: ${stats.uniqueCallers}`);
+        console.log(`  Unique callees: ${stats.uniqueCallees}`);
+      }
+    }
+  } else if (!isCached) {
+    console.log(`\n  Run 'mcdev-mcp init -v ${version}' to initialize.`);
+  }
+}
 
 program
   .command('clean')
@@ -166,25 +265,48 @@ program
   .option('--cache', 'Clean cache directory (decompiled sources)')
   .option('--index', 'Clean index directory (symbol index)')
   .option('--all', 'Clean everything (cache, index)')
+  .option('-v, --version <version>', 'Clean data for specific version only')
   .action((options) => {
     const homeDir = getHomeDir();
     const cacheDir = getCacheDir();
     const indexDir = getIndexDir();
     
-    if (options.callgraph) {
-      const manifest = loadIndexManifest();
-      if (manifest) {
-        const version = manifest.minecraftVersion;
-        const callgraphDir = path.join(getMinecraftCacheDir(version), 'callgraph');
-        if (fs.existsSync(callgraphDir)) {
-          fs.rmSync(callgraphDir, { recursive: true });
-          console.log(`Removed callgraph data for ${version}`);
-        } else {
-          console.log('No callgraph data found');
-        }
+    if (options.callgraph && !options.version) {
+      console.log('--callgraph requires -v <version>');
+      process.exit(1);
+    }
+    
+    if (options.callgraph && options.version) {
+      const callgraphDir = path.join(getMinecraftCacheDir(options.version), 'callgraph');
+      if (fs.existsSync(callgraphDir)) {
+        fs.rmSync(callgraphDir, { recursive: true });
+        console.log(`Removed callgraph data for ${options.version}`);
       } else {
-        console.log('No initialized version found');
+        console.log(`No callgraph data found for ${options.version}`);
       }
+      return;
+    }
+    
+    if (options.version) {
+      const versionCacheDir = path.join(cacheDir, options.version);
+      const versionIndexDir = path.join(indexDir, options.version);
+      
+      if (options.all || (!options.cache && !options.index)) {
+        options.cache = true;
+        options.index = true;
+      }
+      
+      if (options.cache && fs.existsSync(versionCacheDir)) {
+        fs.rmSync(versionCacheDir, { recursive: true });
+        console.log(`Removed cache for ${options.version}: ${versionCacheDir}`);
+      }
+      
+      if (options.index && fs.existsSync(versionIndexDir)) {
+        fs.rmSync(versionIndexDir, { recursive: true });
+        console.log(`Removed index for ${options.version}: ${versionIndexDir}`);
+      }
+      
+      console.log(`\nRun 'mcdev-mcp init -v ${options.version}' to reinitialize.`);
       return;
     }
     
@@ -195,10 +317,11 @@ program
     
     if (!options.cache && !options.index) {
       console.log('Specify what to clean:');
-      console.log('  --cache     Clean decompiled sources');
-      console.log('  --index     Clean symbol index');
-      console.log('  --callgraph Clean callgraph database only');
-      console.log('  --all       Clean everything');
+      console.log('  --cache           Clean decompiled sources');
+      console.log('  --index           Clean symbol index');
+      console.log('  --callgraph       Clean callgraph database only (requires -v)');
+      console.log('  --all             Clean everything');
+      console.log('  -v <version>      Clean data for specific version only');
       return;
     }
     
@@ -220,7 +343,7 @@ program
       }
     }
     
-    console.log('\nRun `mcdev-mcp init` to reinitialize.');
+    console.log('\nRun `mcdev-mcp init -v <version>` to reinitialize.');
   });
 
 program.parse();
