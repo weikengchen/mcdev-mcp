@@ -8,6 +8,7 @@ An **MCP (Model Context Protocol) server** that empowers AI coding agents to wor
 ## Features
 
 - **Decompiled Source Access** — Auto-downloads and decompiles Minecraft client using official Mojang mappings
+- **Dev Snapshot Support** — Works with development snapshots (e.g., `26.1-snapshot-10`) that lack ProGuard mappings
 - **Symbol Search** — Search for classes, methods, and fields by name
 - **Source Retrieval** — Get full class source or individual methods with context
 - **Package Exploration** — List all classes under a package path or discover available packages
@@ -31,23 +32,33 @@ npm run build
 
 ```bash
 # Download, decompile, and index Minecraft sources (~2-5 minutes)
-node dist/cli.js init -v 1.21.1
+node dist/cli.js init -v 26.1-snapshot-10
 ```
 
 This command:
-1. Downloads the Minecraft client JAR and Mojang mappings
-2. Decompiles with official mappings (uses modified DecompilerMC)
+1. Downloads the Minecraft client JAR (and Mojang mappings if available)
+2. Decompiles using FernFlower (via modified DecompilerMC)
 3. Builds the symbol index (classes, methods, fields, inheritance)
 4. Generates call graph for `mc_find_refs`
+
+### Supported Versions
+
+| Version Type | Example | Notes |
+|--------------|---------|-------|
+| Dev snapshots | `26.1-snapshot-10` | Already unobfuscated, no mappings needed |
+| Release (>= 1.21.11) | `1.21.1`, `1.21.4` | Requires Mojang ProGuard mappings |
+| Old versions | `< 1.21.11` | Not supported |
+
+> **Note:** Minecraft is now using a new versioning scheme (26.x). Versions before 1.21.11 are not supported.
 
 ### (Optional) Skip Call Graph
 
 ```bash
 # Skip callgraph generation if you don't need mc_find_refs
-node dist/cli.js init -v 1.21.1 --skip-callgraph
+node dist/cli.js init -v 26.1-snapshot-10 --skip-callgraph
 
 # Generate callgraph later
-node dist/cli.js callgraph -v 1.21.1
+node dist/cli.js callgraph -v 26.1-snapshot-10
 ```
 
 ### Add to Your MCP Client
@@ -82,7 +93,7 @@ Set the active Minecraft version for this session. Must be called before other t
 
 ```json
 {
-  "version": "1.21.1"
+  "version": "26.1-snapshot-10"
 }
 ```
 
@@ -214,6 +225,23 @@ Find classes that extend or implement a given class or interface.
 | `rebuild -v <version>` | Rebuild the symbol index from cached sources |
 | `clean --all` | Clean all cached data |
 
+### Re-indexing with a Different Decompiler
+
+To switch decompilers and re-index:
+
+```bash
+# Clean existing data for a version
+rm -rf ~/.mcdev-mcp/DecompilerMC/src/26.1-snapshot-10 \
+       ~/.mcdev-mcp/DecompilerMC/versions/26.1-snapshot-10 \
+       ~/.mcdev-mcp/DecompilerMC/tmp/* \
+       ~/.mcdev-mcp/index/26.1-snapshot-10 \
+       ~/.mcdev-mcp/cache/26.1-snapshot-10 \
+       ~/.mcdev-mcp/callgraph/26.1-snapshot-10
+
+# Re-initialize
+node dist/cli.js init -v 26.1-snapshot-10
+```
+
 ## Architecture
 
 ```
@@ -320,7 +348,7 @@ This project includes modified code from third-party projects:
 
 Additional runtime dependencies (downloaded/used):
 - **[Mojang](https://www.minecraft.net/)** — Official ProGuard mappings and Minecraft client JAR
-- **CFR** and **FernFlower** decompilers (bundled with DecompilerMC)
+- **FernFlower** decompiler (bundled with DecompilerMC, now the default)
 
 See [LICENSE](LICENSE) for full license text and third-party attributions.
 
