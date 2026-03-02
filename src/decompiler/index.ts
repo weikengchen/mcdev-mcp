@@ -86,9 +86,7 @@ async function runDecompilerMC(
       ourMainPy,
       '--mcversion', version,
       '--side', 'client',
-      '--lib-dir', libDir,
-      '--decompiler', 'fernflower',
-      '-q'
+      '--lib-dir', libDir
     ], {
       cwd: DECOMPILER_MC_DIR,
       stdio: 'inherit',

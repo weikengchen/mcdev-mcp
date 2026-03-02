@@ -21,6 +21,10 @@ export function getToolsDir(): string {
   return path.join(getHomeDir(), 'tools');
 }
 
+export function getDecompilerMcDir(): string {
+  return path.join(getHomeDir(), 'DecompilerMC');
+}
+
 export function getMinecraftCacheDir(version: string): string {
   return path.join(getCacheDir(), version);
 }

@@ -14,7 +14,8 @@ import {
   getIndexDir, 
   getMinecraftCacheDir,
   getIndexedVersions,
-  isVersionIndexed
+  isVersionIndexed,
+  getDecompilerMcDir
 } from './utils/paths.js';
 import { ensureCallgraph, hasCallgraphDb, getCallgraphStats } from './callgraph/index.js';
 
@@ -264,7 +265,7 @@ program
   .option('--callgraph', 'Only clean callgraph data')
   .option('--cache', 'Clean cache directory (decompiled sources)')
   .option('--index', 'Clean index directory (symbol index)')
-  .option('--all', 'Clean everything (cache, index)')
+  .option('--all', 'Clean everything (cache, index, DecompilerMC)')
   .option('-v, --version <version>', 'Clean data for specific version only')
   .action((options) => {
     const homeDir = getHomeDir();
@@ -320,7 +321,7 @@ program
       console.log('  --cache           Clean decompiled sources');
       console.log('  --index           Clean symbol index');
       console.log('  --callgraph       Clean callgraph database only (requires -v)');
-      console.log('  --all             Clean everything');
+      console.log('  --all             Clean everything (cache, index, DecompilerMC)');
       console.log('  -v <version>      Clean data for specific version only');
       return;
     }
@@ -340,6 +341,16 @@ program
         console.log(`Removed index: ${indexDir}`);
       } else {
         console.log('Index directory not found');
+      }
+    }
+    
+    if (options.all) {
+      const decompilerMcDir = getDecompilerMcDir();
+      if (fs.existsSync(decompilerMcDir)) {
+        fs.rmSync(decompilerMcDir, { recursive: true });
+        console.log(`Removed DecompilerMC: ${decompilerMcDir}`);
+      } else {
+        console.log('DecompilerMC directory not found');
       }
     }
     
