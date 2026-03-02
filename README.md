@@ -7,7 +7,7 @@ An **MCP (Model Context Protocol) server** that empowers AI coding agents to wor
 
 ## Features
 
-- **Decompiled Source Access** — Auto-downloads and decompiles Minecraft client using official Mojang mappings
+- **Decompiled Source Access** — Auto-downloads and decompiles Minecraft client using [Vineflower](https://github.com/Vineflower/vineflower)
 - **Dev Snapshot Support** — Works with development snapshots (e.g., `26.1-snapshot-10`) that lack ProGuard mappings
 - **Symbol Search** — Search for classes, methods, and fields by name
 - **Source Retrieval** — Get full class source or individual methods with context
@@ -28,16 +28,18 @@ npm install
 npm run build
 ```
 
+> **Upgrading from an older version?** If you have a previous installation using DecompilerMC, run `node dist/cli.js clean --all` first to remove old cached data.
+
 ### Initialize
 
 ```bash
 # Download, decompile, and index Minecraft sources (~2-5 minutes)
-node dist/cli.js init -v 26.1-snapshot-10
+node dist/cli.js init -v 1.21.11
 ```
 
 This command:
-1. Downloads the Minecraft client JAR (and Mojang mappings if available)
-2. Decompiles using FernFlower (via modified DecompilerMC)
+1. Downloads the Minecraft client JAR
+2. Decompiles using Vineflower (pure Java, 8 threads)
 3. Builds the symbol index (classes, methods, fields, inheritance)
 4. Generates call graph for `mc_find_refs`
 
@@ -46,7 +48,7 @@ This command:
 | Version Type | Example | Notes |
 |--------------|---------|-------|
 | Dev snapshots | `26.1-snapshot-10` | Already unobfuscated, no mappings needed |
-| Release (>= 1.21.11) | `1.21.1`, `1.21.4` | Requires Mojang ProGuard mappings |
+| Release (>= 1.21.11) | `1.21.11` | Uses pre-unobfuscated JAR when available |
 | Old versions | `< 1.21.11` | Not supported |
 
 > **Note:** Minecraft is now using a new versioning scheme (26.x). Versions before 1.21.11 are not supported.
@@ -55,10 +57,10 @@ This command:
 
 ```bash
 # Skip callgraph generation if you don't need mc_find_refs
-node dist/cli.js init -v 26.1-snapshot-10 --skip-callgraph
+node dist/cli.js init -v 1.21.11 --skip-callgraph
 
 # Generate callgraph later
-node dist/cli.js callgraph -v 26.1-snapshot-10
+node dist/cli.js callgraph -v 1.21.11
 ```
 
 ### Add to Your MCP Client
@@ -93,7 +95,7 @@ Set the active Minecraft version for this session. Must be called before other t
 
 ```json
 {
-  "version": "26.1-snapshot-10"
+  "version": "1.21.11"
 }
 ```
 
@@ -208,9 +210,7 @@ Find classes that extend or implement a given class or interface.
 | Dependency | Version | Purpose |
 |------------|---------|---------|
 | Node.js | 18+ | Runtime |
-| Python | 3.7+ | DecompilerMC dependency |
-| Java | 8+ | Decompilation & callgraph |
-| Git | any | Clone dependencies |
+| Java | 8+ | Decompilation (Vineflower) & callgraph |
 | ~2GB | disk | Decompiled sources + cache |
 
 > **Note:** Java 17+ is recommended for the `callgraph` command due to Gradle compatibility.
@@ -225,21 +225,16 @@ Find classes that extend or implement a given class or interface.
 | `rebuild -v <version>` | Rebuild the symbol index from cached sources |
 | `clean --all` | Clean all cached data |
 
-### Re-indexing with a Different Decompiler
+### Re-indexing
 
-To switch decompilers and re-index:
+To re-index a version:
 
 ```bash
 # Clean existing data for a version
-rm -rf ~/.mcdev-mcp/DecompilerMC/src/26.1-snapshot-10 \
-       ~/.mcdev-mcp/DecompilerMC/versions/26.1-snapshot-10 \
-       ~/.mcdev-mcp/DecompilerMC/tmp/* \
-       ~/.mcdev-mcp/index/26.1-snapshot-10 \
-       ~/.mcdev-mcp/cache/26.1-snapshot-10 \
-       ~/.mcdev-mcp/callgraph/26.1-snapshot-10
+node dist/cli.js clean -v 1.21.11 --all
 
 # Re-initialize
-node dist/cli.js init -v 26.1-snapshot-10
+node dist/cli.js init -v 1.21.11
 ```
 
 ## Architecture
@@ -250,12 +245,10 @@ mcdev-mcp/
 │   ├── index.ts              # MCP server entry point
 │   ├── cli.ts                # CLI commands
 │   ├── tools/                # MCP tool implementations
-│   ├── decompiler/           # DecompilerMC integration
+│   ├── decompiler/           # Vineflower integration (pure TypeScript/Java)
 │   ├── indexer/              # Symbol index builder
 │   ├── callgraph/            # Call graph generation & queries
 │   └── storage/              # Source & index storage
-├── lib/
-│   └── DecompilerMC-main.py  # Modified DecompilerMC (supports dev snapshots)
 └── dist/                     # Compiled output
 ```
 
@@ -287,7 +280,7 @@ mcdev-mcp/
         ▼                                        ▼
 ┌───────────────────┐                  ┌─────────────────────┐
 │ Decompiled Src    │                  │ java-callgraph2     │
-│ (DecompilerMC)    │                  │ (static analysis)   │
+│ (Vineflower)      │                  │ (static analysis)   │
 └───────────────────┘                  └─────────────────────┘
 ```
 
@@ -297,15 +290,18 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design documentati
 
 ```
 ~/.mcdev-mcp/
-├── DecompilerMC/              # DecompilerMC repository (libs only)
+├── tools/
+│   └── vineflower.jar         # Downloaded once
 ├── java-callgraph2/           # Call graph tool
 ├── cache/
 │   └── {version}/
-│       └── client/            # Decompiled Minecraft sources
-└── index/
-    └── {version}/
-        ├── manifest.json      # Index metadata
-        └── minecraft/         # Per-package symbol indices
+│       ├── jars/               # Downloaded JARs
+│       └── client/             # Decompiled Minecraft sources
+├── index/
+│   └── {version}/
+│       ├── manifest.json       # Index metadata
+│       └── minecraft/          # Per-package symbol indices
+└── tmp/                        # Temporary files (cleaned by --all)
 ```
 
 ## Development
@@ -341,14 +337,14 @@ This tool is for **reference only** — do not copy decompiled code directly int
 
 ## Third-Party Components
 
-This project includes modified code from third-party projects:
+This project includes or uses third-party software under the following licenses:
 
-- **[DecompilerMC](https://github.com/hube12/DecompilerMC)** (MIT) — `lib/DecompilerMC-main.py` is a modified version that supports unobfuscated dev snapshots
+- **[DecompilerMC](https://github.com/hube12/DecompilerMC)** (MIT) — Decompiler logic adapted and translated from Python to TypeScript in `src/decompiler/`
+- **[Vineflower](https://github.com/Vineflower/vineflower)** (Apache-2.0) — Java decompiler used for source generation
 - **[java-callgraph2](https://github.com/Adrninistrator/java-callgraph2)** — Cloned at runtime for static call graph generation
 
 Additional runtime dependencies (downloaded/used):
 - **[Mojang](https://www.minecraft.net/)** — Official ProGuard mappings and Minecraft client JAR
-- **FernFlower** decompiler (bundled with DecompilerMC, now the default)
 
 See [LICENSE](LICENSE) for full license text and third-party attributions.
 

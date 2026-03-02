@@ -26,9 +26,10 @@ SOFTWARE.
 
 This project includes or uses third-party software under the following licenses:
 
-### DecompilerMC (lib/DecompilerMC-main.py)
+### DecompilerMC
 
-Portions of this software are derived from DecompilerMC.
+The decompiler integration logic in `src/decompiler/` is adapted and translated from Python to TypeScript based on DecompilerMC's architecture.
+
 Source: https://github.com/hube12/DecompilerMC
 
 MIT License
@@ -52,3 +53,25 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+### Vineflower
+
+This project uses Vineflower for decompiling Minecraft JAR files.
+
+Source: https://github.com/Vineflower/vineflower
+
+Apache License 2.0
+
+Copyright (c) 2021-2023 Vineflower contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
