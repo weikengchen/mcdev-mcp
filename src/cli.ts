@@ -15,7 +15,7 @@ import {
   getMinecraftCacheDir,
   getIndexedVersions,
   isVersionIndexed,
-  getDecompilerMcDir
+  getTmpDir
 } from './utils/paths.js';
 import { ensureCallgraph, hasCallgraphDb, getCallgraphStats } from './callgraph/index.js';
 
@@ -321,7 +321,7 @@ program
       console.log('  --cache           Clean decompiled sources');
       console.log('  --index           Clean symbol index');
       console.log('  --callgraph       Clean callgraph database only (requires -v)');
-      console.log('  --all             Clean everything (cache, index, DecompilerMC)');
+      console.log('  --all             Clean everything (cache, index, tmp)');
       console.log('  -v <version>      Clean data for specific version only');
       return;
     }
@@ -345,12 +345,12 @@ program
     }
     
     if (options.all) {
-      const decompilerMcDir = getDecompilerMcDir();
-      if (fs.existsSync(decompilerMcDir)) {
-        fs.rmSync(decompilerMcDir, { recursive: true });
-        console.log(`Removed DecompilerMC: ${decompilerMcDir}`);
+      const tmpDir = path.join(homeDir, 'tmp');
+      if (fs.existsSync(tmpDir)) {
+        fs.rmSync(tmpDir, { recursive: true });
+        console.log(`Removed tmp: ${tmpDir}`);
       } else {
-        console.log('DecompilerMC directory not found');
+        console.log('tmp directory not found');
       }
     }
     

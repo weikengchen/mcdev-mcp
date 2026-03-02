@@ -47,21 +47,23 @@ export async function buildIndex(options: BuildIndexOptions): Promise<IndexBuild
       addToPackageIndex(minecraftPackages, parsed);
     }
     processedFiles++;
-    if (progressCb && processedFiles % 100 === 0) {
+    if (progressCb && processedFiles % 500 === 0) {
       const progress = Math.round(5 + (processedFiles / totalFiles) * 85);
       progressCb('index', progress, `Processed ${processedFiles}/${totalFiles} files...`);
     }
   }
   
-  if (progressCb) progressCb('index', 50, `Processing ${fabricJavaFiles.length} Fabric API files...`);
-  
+  if (fabricJavaFiles.length > 0) {
+    if (progressCb) progressCb('index', 50, `Processing ${fabricJavaFiles.length} Fabric API files...`);
+  }
+
   for (const file of fabricJavaFiles) {
     const parsed = parseJavaFile(file);
     if (parsed) {
       addToPackageIndex(fabricPackages, parsed);
     }
     processedFiles++;
-    if (progressCb && processedFiles % 100 === 0) {
+    if (progressCb && processedFiles % 500 === 0) {
       const progress = Math.round(5 + (processedFiles / totalFiles) * 85);
       progressCb('index', progress, `Processed ${processedFiles}/${totalFiles} files...`);
     }

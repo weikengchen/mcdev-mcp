@@ -1,15 +1,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { spawn } from 'child_process';
-import { getHomeDir, getMinecraftSourceDir, ensureHomeDirs, ensureDir } from '../utils/paths.js';
-import { fileURLToPath } from 'url';
-
-const DECOMPILER_MC_DIR = path.join(getHomeDir(), 'DecompilerMC');
-
-function getProjectRoot(): string {
-  const __filename = fileURLToPath(import.meta.url);
-  return path.dirname(path.dirname(path.dirname(__filename)));
-}
+import { ensureVineflower, type ProgressCallback } from './tools.js';
+import { downloadClientJar } from './download.js';
+import { decompile } from './vineflower.js';
+import {
+  getMinecraftSourceDir,
+  getMinecraftJarPath,
+  getIndexDir,
+  ensureHomeDirs,
+  ensureDir,
+} from '../utils/paths.js';
 
 export interface DecompilerStatus {
   hasMinecraftSources: boolean;
@@ -27,140 +27,35 @@ export function isDecompiled(version: string): boolean {
   return javaFiles.length > 100;
 }
 
-const REQUIRED_LIBS = ['cfr-0.152.jar', 'fernflower.jar', 'SpecialSource-1.11.4.jar'];
-
-function hasDecompilerMCLibs(): boolean {
-  const libDir = path.join(DECOMPILER_MC_DIR, 'lib');
-  return REQUIRED_LIBS.every(jar => fs.existsSync(path.join(libDir, jar)));
-}
-
-async function cloneDecompilerMC(progressCb?: (stage: string, progress: number, message: string) => void): Promise<void> {
-  if (hasDecompilerMCLibs()) return;
-  
-  if (progressCb) {
-    progressCb('decompiler-mc', 0, 'Cloning DecompilerMC...');
-  }
-  
-  ensureDir(getHomeDir());
-  
-  return new Promise((resolve, reject) => {
-    const proc = spawn('git', ['clone', 'https://github.com/hube12/DecompilerMC.git', DECOMPILER_MC_DIR], {
-      stdio: 'inherit',
-    });
-    
-    proc.on('close', (code) => {
-      if (code === 0) {
-        if (progressCb) progressCb('decompiler-mc', 100, 'DecompilerMC cloned.');
-        resolve();
-      } else {
-        reject(new Error(`Failed to clone DecompilerMC (exit code ${code})`));
-      }
-    });
-    
-    proc.on('error', (err) => {
-      reject(new Error(`Failed to clone DecompilerMC: ${err.message}`));
-    });
-  });
-}
-
-async function runDecompilerMC(
-  version: string,
-  progressCb?: (stage: string, progress: number, message: string) => void
-): Promise<string> {
-  const outputDir = path.join(DECOMPILER_MC_DIR, 'src', version, 'client');
-  
-  if (fs.existsSync(outputDir) && fs.readdirSync(outputDir).length > 0) {
-    if (progressCb) progressCb('decompile', 100, 'Already decompiled.');
-    return outputDir;
-  }
-  
-  const ourMainPy = path.join(getProjectRoot(), 'lib', 'DecompilerMC-main.py');
-  const libDir = path.join(DECOMPILER_MC_DIR, 'lib');
-  
-  if (progressCb) {
-    progressCb('decompile', 0, `Decompiling Minecraft ${version} (this takes 1-3 minutes)...`);
-  }
-  
-  return new Promise((resolve, reject) => {
-    const proc = spawn('python3', [
-      ourMainPy,
-      '--mcversion', version,
-      '--side', 'client',
-      '--lib-dir', libDir
-    ], {
-      cwd: DECOMPILER_MC_DIR,
-      stdio: 'inherit',
-    });
-    
-    proc.on('close', (code) => {
-      if (code === 0) {
-        if (progressCb) progressCb('decompile', 100, 'Decompilation complete.');
-        resolve(outputDir);
-      } else {
-        reject(new Error(`DecompilerMC failed (exit code ${code})`));
-      }
-    });
-    
-    proc.on('error', (err) => {
-      reject(new Error(`Failed to run DecompilerMC: ${err.message}`));
-    });
-  });
-}
-
 export async function ensureDecompiled(
   version: string,
-  progressCb?: (stage: string, progress: number, message: string) => void
+  progressCb?: ProgressCallback
 ): Promise<{ minecraftDir: string; fabricDir: string | null; fabricVersion: string | null }> {
   ensureHomeDirs();
-  
-  const minecraftDir = getMinecraftSourceDir(version);
-  
-  if (!isDecompiled(version)) {
-    await cloneDecompilerMC(progressCb);
-    
-    const decompiledDir = await runDecompilerMC(version, progressCb);
-    
-    ensureDir(minecraftDir);
-    
-    if (progressCb) {
-      progressCb('copy', 0, 'Copying decompiled sources...');
-    }
-    
-    await copyDir(decompiledDir, minecraftDir);
-    
-    if (progressCb) {
-      progressCb('copy', 100, 'Sources copied.');
-    }
-  }
-  
-  return { minecraftDir, fabricDir: null, fabricVersion: null };
-}
 
-async function copyDir(src: string, dest: string): Promise<void> {
-  ensureDir(dest);
-  
-  const entries = fs.readdirSync(src, { withFileTypes: true });
-  
-  for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
+  const minecraftDir = getMinecraftSourceDir(version);
+
+  if (!isDecompiled(version)) {
+    const vineflowerJar = await ensureVineflower(progressCb);
+
+    const jarPath = getMinecraftJarPath(version);
+    ensureDir(path.dirname(jarPath));
     
-    if (entry.isDirectory()) {
-      await copyDir(srcPath, destPath);
-    } else {
-      fs.copyFileSync(srcPath, destPath);
-    }
+    await downloadClientJar(version, jarPath, progressCb);
+
+    await decompile(vineflowerJar, jarPath, minecraftDir, progressCb);
   }
+
+  return { minecraftDir, fabricDir: null, fabricVersion: null };
 }
 
 export function getStatus(): DecompilerStatus {
   ensureHomeDirs();
-  
-  const indexManifestPath = path.join(getHomeDir(), 'index', 'manifest.json');
-  
+
+  const indexManifestPath = path.join(getIndexDir(), 'manifest.json');
   let minecraftVersion: string | null = null;
   let fabricApiVersion: string | null = null;
-  
+
   if (fs.existsSync(indexManifestPath)) {
     try {
       const manifest = JSON.parse(fs.readFileSync(indexManifestPath, 'utf-8'));
@@ -170,9 +65,9 @@ export function getStatus(): DecompilerStatus {
       // Ignore parse errors
     }
   }
-  
+
   const hasMinecraftSources = minecraftVersion ? isDecompiled(minecraftVersion) : false;
-  
+
   return {
     hasMinecraftSources,
     hasFabricApiSources: false,

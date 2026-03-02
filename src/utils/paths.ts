@@ -45,6 +45,10 @@ export function getVineflowerPath(): string {
   return path.join(getToolsDir(), 'vineflower.jar');
 }
 
+export function getTmpDir(version: string): string {
+  return path.join(getHomeDir(), 'tmp', version);
+}
+
 export function getIndexManifestPath(): string {
   return path.join(getIndexDir(), 'manifest.json');
 }
