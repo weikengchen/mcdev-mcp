@@ -35,12 +35,22 @@ export async function ensureJavaCG(progressCb?: ProgressCallback): Promise<strin
   if (fs.existsSync(jarPath)) return jarPath;
   
   const jcDir = getJavaCGDir();
+  const gradlewPath = path.join(jcDir, 'gradlew');
+  const gradlewBatPath = path.join(jcDir, 'gradlew.bat');
+  const isWindows = process.platform === 'win32';
+  const gradlewCmd = isWindows ? 'gradlew.bat' : 'gradlew';
+  const gradlewExists = isWindows ? fs.existsSync(gradlewBatPath) : fs.existsSync(gradlewPath);
   
   if (progressCb) progressCb('javacg', 0, 'Cloning java-callgraph2...');
   
-  if (!fs.existsSync(jcDir)) {
+  // Clone if gradlew doesn't exist (covers incomplete/corrupted clones)
+  if (!gradlewExists) {
+    if (fs.existsSync(jcDir)) {
+      fs.rmSync(jcDir, { recursive: true, force: true });
+    }
     await new Promise<void>((resolve, reject) => {
       const proc = spawn('git', ['clone', 'https://github.com/Adrninistrator/java-callgraph2.git', jcDir], { stdio: 'inherit' });
+      proc.on('error', (err) => reject(new Error(`git clone failed: ${err.message}`)));
       proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`git clone failed: ${code}`)));
     });
   }
@@ -51,9 +61,8 @@ export async function ensureJavaCG(progressCb?: ProgressCallback): Promise<strin
     fs.writeFileSync(gradleWrapperProps, 'distributionUrl=https\\://services.gradle.org/distributions/gradle-9.3.1-bin.zip\n');
   }
   
-  // Make gradlew executable
-  const gradlewPath = path.join(jcDir, 'gradlew');
-  if (fs.existsSync(gradlewPath)) {
+  // Make gradlew executable (Unix only)
+  if (!isWindows && fs.existsSync(gradlewPath)) {
     fs.chmodSync(gradlewPath, 0o755);
   }
   
@@ -70,7 +79,8 @@ export async function ensureJavaCG(progressCb?: ProgressCallback): Promise<strin
   
   // Use gen_run_jar task instead of shadowJar (creates run_javacg2.jar with lib/ folder)
   await new Promise<void>((resolve, reject) => {
-    const proc = spawn('./gradlew', ['gen_run_jar'], { cwd: jcDir, stdio: 'inherit' });
+    const proc = spawn(gradlewCmd, ['gen_run_jar'], { cwd: jcDir, stdio: 'inherit' });
+    proc.on('error', (err) => reject(new Error(`gradle build failed: ${err.message}`)));
     proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`gradle build failed: ${code}`)));
   });
   
@@ -101,6 +111,7 @@ export async function ensureRemappedJar(version: string, progressCb?: ProgressCa
   
   return new Promise((resolve, reject) => {
     const proc = spawn('java', ['-Xmx2g', '-jar', specialSource, '--in-jar', clientJar, '--out-jar', remappedJar, '--srg-in', tsrgMappings, '--kill-lvt'], { stdio: 'inherit' });
+    proc.on('error', (err) => reject(new Error(`SpecialSource failed: ${err.message}`)));
     proc.on('close', (code) => code === 0 && fs.existsSync(remappedJar) ? (progressCb?.('remap', 100, 'Remapped jar created.'), resolve(remappedJar)) : reject(new Error(`SpecialSource failed: ${code}`)));
   });
 }
@@ -132,6 +143,7 @@ export async function generateCallgraph(version: string, progressCb?: ProgressCa
   
   return new Promise((resolve, reject) => {
     const proc = spawn('java', ['-Xmx4g', '-cp', classpath, 'com.adrninistrator.javacg2.entry.JavaCG2Entry', configDir], { cwd: outputDir, stdio: 'inherit' });
+    proc.on('error', (err) => reject(new Error(`java-callgraph2 failed: ${err.message}`)));
     proc.on('close', (code) => code === 0 || fs.existsSync(expectedOutput) ? (progressCb?.('callgraph', 100, 'Callgraph generated.'), resolve(expectedOutput)) : reject(new Error(`java-callgraph2 failed: ${code}`)));
   });
 }
