@@ -139,7 +139,8 @@ export async function generateCallgraph(version: string, progressCb?: ProgressCa
   const libJars = fs.existsSync(libDir) 
     ? fs.readdirSync(libDir).filter(f => f.endsWith('.jar')).map(f => path.join(libDir, f))
     : [];
-  const classpath = [javacgPath, ...libJars].join(':');
+  const classpathSep = process.platform === 'win32' ? ';' : ':';
+  const classpath = [javacgPath, ...libJars].join(classpathSep);
   
   return new Promise((resolve, reject) => {
     const proc = spawn('java', ['-Xmx4g', '-cp', classpath, 'com.adrninistrator.javacg2.entry.JavaCG2Entry', configDir], { cwd: outputDir, stdio: 'inherit' });
