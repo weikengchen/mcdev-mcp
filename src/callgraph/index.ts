@@ -79,7 +79,7 @@ export async function ensureJavaCG(progressCb?: ProgressCallback): Promise<strin
   
   // Use gen_run_jar task instead of shadowJar (creates run_javacg2.jar with lib/ folder)
   await new Promise<void>((resolve, reject) => {
-    const proc = spawn(gradlewCmd, ['gen_run_jar'], { cwd: jcDir, stdio: 'inherit' });
+    const proc = spawn(gradlewCmd, ['gen_run_jar'], { cwd: jcDir, stdio: 'inherit', shell: isWindows });
     proc.on('error', (err) => reject(new Error(`gradle build failed: ${err.message}`)));
     proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`gradle build failed: ${code}`)));
   });
