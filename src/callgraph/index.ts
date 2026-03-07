@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import Database from 'better-sqlite3';
-import { ensureDir, getHomeDir } from '../utils/paths.js';
+import { ensureDir, getHomeDir, getMinecraftJarPath } from '../utils/paths.js';
 import { getCallgraphDir, getCallgraphDbPath } from './query.js';
 
 const SPECIAL_SOURCE_VERSION = '1.11.4';
@@ -92,8 +92,8 @@ export async function ensureRemappedJar(version: string, progressCb?: ProgressCa
   const remappedJar = getRemappedJarPath(version);
   if (fs.existsSync(remappedJar)) return remappedJar;
   
+  const clientJar = getMinecraftJarPath(version);
   const dmcdDir = getDecompilerMCDir();
-  const clientJar = path.join(dmcdDir, 'versions', version, 'client.jar');
   const tsrgMappings = path.join(dmcdDir, 'mappings', version, 'client.tsrg');
   const specialSource = path.join(dmcdDir, 'lib', `SpecialSource-${SPECIAL_SOURCE_VERSION}.jar`);
   
