@@ -1,0 +1,56 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/mcpb/main/dist/mcpb-manifest-v0.4.schema.json",
+  "manifest_version": "0.4",
+  "name": "mcdev-mcp",
+  "display_name": "Minecraft Dev MCP",
+  "version": "1.0.0",
+  "description": "MCP server for Minecraft mod development - provides decompiled code access and symbol search",
+  "long_description": "An MCP server that gives AI assistants access to decompiled Minecraft source code for Fabric modding. Supports browsing classes, methods, packages, searching symbols, finding class hierarchies, and cross-references across multiple Minecraft versions.",
+  "author": {
+    "name": "weikengchen",
+    "url": "https://github.com/weikengchen"
+  },
+  "homepage": "https://github.com/weikengchen/mcdev-mcp",
+  "documentation": "https://github.com/weikengchen/mcdev-mcp#readme",
+  "support": "https://github.com/weikengchen/mcdev-mcp/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/weikengchen/mcdev-mcp.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "minecraft",
+    "fabric",
+    "modding",
+    "decompiler",
+    "java"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/index.js"
+      ],
+      "env": {}
+    }
+  },
+  "tools": [
+    { "name": "mc_set_version", "description": "Set the active Minecraft version for subsequent queries" },
+    { "name": "mc_list_versions", "description": "List all available Minecraft versions" },
+    { "name": "mc_search", "description": "Search for classes, methods, and fields by name" },
+    { "name": "mc_get_class", "description": "Get the decompiled source code of a class" },
+    { "name": "mc_get_method", "description": "Get the decompiled source of a specific method" },
+    { "name": "mc_list_classes", "description": "List all classes in a package" },
+    { "name": "mc_list_packages", "description": "List all packages in the Minecraft source" },
+    { "name": "mc_find_hierarchy", "description": "Find the class hierarchy (superclasses and subclasses)" },
+    { "name": "mc_find_refs", "description": "Find references to a class or method" }
+  ],
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}

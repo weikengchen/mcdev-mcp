@@ -32,3 +32,6 @@ lib/mappings/
 lib/src/
 lib/tmp/
 lib/versions/
+
+# MCPB bundles
+*.mcpb
