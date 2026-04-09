@@ -18,23 +18,13 @@ An **MCP (Model Context Protocol) server** that empowers AI coding agents to wor
 
 ## Quick Start
 
-### Installation
+> **Security note — `init` is intentionally terminal-only.** The MCP server only exposes read/query tools. Downloading and decompiling Minecraft sources must be triggered by you in the terminal; an AI agent connected to the server has no tool surface to trigger `init`, `rebuild`, `clean`, or `callgraph`.
 
-```bash
-# Clone and install
-git clone https://github.com/weikengchen/mcdev-mcp.git
-cd mcdev-mcp
-npm install
-npm run build
-```
-
-> **Upgrading from an older version?** If you have a previous installation using DecompilerMC, run `node dist/cli.js clean --all` first to remove old cached data.
-
-### Initialize
+### 1. Initialize in your terminal
 
 ```bash
 # Download, decompile, and index Minecraft sources (~2-5 minutes)
-node dist/cli.js init -v 1.21.11
+npx mcdev-mcp init -v 1.21.11
 ```
 
 This command:
@@ -42,6 +32,23 @@ This command:
 2. Decompiles using Vineflower (pure Java, 8 threads)
 3. Builds the symbol index (classes, methods, fields, inheritance)
 4. Generates call graph for `mc_find_refs`
+
+Data is stored under `~/.mcdev-mcp/`, so it persists across `npx` invocations.
+
+### 2. Add to your MCP client
+
+```json
+{
+  "mcpServers": {
+    "mcdev": {
+      "command": "npx",
+      "args": ["-y", "mcdev-mcp", "serve"]
+    }
+  }
+}
+```
+
+The `serve` subcommand starts the MCP server over stdio. Your MCP client (Claude Desktop, Cursor, etc.) launches it automatically — you never run `serve` directly.
 
 ### Supported Versions
 
@@ -57,32 +64,34 @@ This command:
 
 ```bash
 # Skip callgraph generation if you don't need mc_find_refs
-node dist/cli.js init -v 1.21.11 --skip-callgraph
+npx mcdev-mcp init -v 1.21.11 --skip-callgraph
 
 # Generate callgraph later
-node dist/cli.js callgraph -v 1.21.11
-```
-
-### Add to Your MCP Client
-
-```json
-{
-  "mcpServers": {
-    "mcdev": {
-      "command": "node",
-      "args": ["/path/to/mcdev-mcp/dist/index.js"]
-    }
-  }
-}
+npx mcdev-mcp callgraph -v 1.21.11
 ```
 
 ### Verify Installation
 
 ```bash
-node dist/cli.js status
+npx mcdev-mcp status
 ```
 
 > **Note:** The `mc_set_version` tool must be called before using any other MCP tools. If the version isn't initialized, the AI will be instructed to ask you to run `init`.
+
+### Install from source (development)
+
+```bash
+git clone https://github.com/weikengchen/mcdev-mcp.git
+cd mcdev-mcp
+npm install
+npm run build
+
+# Use the local build instead of npx
+node dist/cli.js init -v 1.21.11
+node dist/cli.js serve         # stdio MCP server; MCP clients launch this
+```
+
+> **Upgrading from an older version?** If you have a previous installation using DecompilerMC, run `npx mcdev-mcp clean --all` first to remove old cached data.
 
 ## MCP Tools
 
@@ -217,8 +226,11 @@ Find classes that extend or implement a given class or interface.
 
 ## CLI Commands
 
+Invoke via `npx mcdev-mcp <command>` (or `node dist/cli.js <command>` from a source checkout).
+
 | Command | Description |
 |---------|-------------|
+| `serve` | Start the MCP server over stdio (launched by MCP clients — not run by humans) |
 | `init -v <version>` | Download, decompile, index Minecraft sources, and generate callgraph |
 | `callgraph -v <version>` | Generate call graph for `mc_find_refs` |
 | `status` | Show all initialized versions |
@@ -231,10 +243,10 @@ To re-index a version:
 
 ```bash
 # Clean existing data for a version
-node dist/cli.js clean -v 1.21.11 --all
+npx mcdev-mcp clean -v 1.21.11 --all
 
 # Re-initialize
-node dist/cli.js init -v 1.21.11
+npx mcdev-mcp init -v 1.21.11
 ```
 
 ## Architecture

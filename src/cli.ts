@@ -18,6 +18,7 @@ import {
   getTmpDir
 } from './utils/paths.js';
 import { ensureCallgraph, hasCallgraphDb, getCallgraphStats } from './callgraph/index.js';
+import { startServer } from './index.js';
 
 const program = new Command();
 
@@ -52,6 +53,18 @@ program
   .name('mcdev-mcp')
   .description('MCP server for Minecraft mod development')
   .version('1.0.0');
+
+program
+  .command('serve')
+  .description('Start the MCP server over stdio (used by MCP clients, not humans)')
+  .action(async () => {
+    try {
+      await startServer();
+    } catch (error) {
+      console.error('Fatal error:', error);
+      process.exit(1);
+    }
+  });
 
 program
   .command('init')
