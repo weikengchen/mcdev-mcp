@@ -38,7 +38,10 @@ export async function ensureJavaCG(progressCb?: ProgressCallback): Promise<strin
   const gradlewPath = path.join(jcDir, 'gradlew');
   const gradlewBatPath = path.join(jcDir, 'gradlew.bat');
   const isWindows = process.platform === 'win32';
-  const gradlewCmd = isWindows ? 'gradlew.bat' : 'gradlew';
+  // Node's spawn() does NOT search `cwd` for the executable — it searches PATH.
+  // Pass an absolute path so the Unix case works without a shell. On Windows we
+  // keep the basename and rely on shell:true to resolve .bat via cmd.exe.
+  const gradlewCmd = isWindows ? 'gradlew.bat' : gradlewPath;
   const gradlewExists = isWindows ? fs.existsSync(gradlewBatPath) : fs.existsSync(gradlewPath);
   
   if (progressCb) progressCb('javacg', 0, 'Cloning java-callgraph2...');
