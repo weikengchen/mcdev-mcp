@@ -1,52 +1,26 @@
-# Source and config (dist/ is the built output)
+# mcpb pack already excludes: .git, .gitignore, *.d.ts, *.map, *.mcpb,
+# tsconfig.json, package-lock.json, node_modules/.cache, node_modules/.bin,
+# .DS_Store, etc. (see EXCLUDE_PATTERNS in @anthropic-ai/mcpb).
+#
+# This file adds project-specific exclusions on top of those defaults.
+# It's also copied into the staging dir by scripts/build-mcpb.sh so it
+# applies to the staged production node_modules tree.
+
+# Source, tests, docs, dev tooling — dist/ is what actually ships.
 src/
 tests/
-tsconfig.json
 jest.config.js
-
-# Dev tooling
+docs/
 .github/
 .ruff_cache/
-.git/
 
-# Docs (not needed at runtime)
-docs/
+# Build output of the mcpb script itself.
+dist-mcpb/
 
-# Dev dependencies
-node_modules/typescript/
-node_modules/@babel/
-node_modules/@types/
-node_modules/ts-jest/
-node_modules/@jest/
-node_modules/jest*/
-node_modules/babel-*/
-node_modules/caniuse-lite/
-node_modules/handlebars/
-node_modules/uglify-js/
-node_modules/neo-async/
-node_modules/source-map/
-node_modules/source-map-support/
-node_modules/@jridgewell/
-node_modules/@bcoe/
-node_modules/istanbul-*/
-node_modules/v8-to-istanbul/
-node_modules/@sinclair/
-node_modules/create-jest/
-node_modules/emittery/
-node_modules/expect/
-node_modules/bs-logger/
-
-# Unnecessary files in node_modules
-**/*.md
-**/*.ts
-!**/*.d.ts
-**/LICENSE
-**/CHANGELOG*
-**/HISTORY*
-**/.eslintrc*
-**/.prettierrc*
-**/tsconfig.json
-**/*.map
-
-# Bundle itself
-*.mcpb
+# Trim docs, changelogs, and TypeScript sources out of bundled dependencies.
+# These ship in many npm packages and add MBs without runtime value.
+node_modules/**/*.md
+node_modules/**/CHANGELOG*
+node_modules/**/HISTORY*
+node_modules/**/LICENSE
+node_modules/**/*.ts

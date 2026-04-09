@@ -33,5 +33,9 @@ lib/src/
 lib/tmp/
 lib/versions/
 
+# MCPB build output (produced by scripts/build-mcpb.sh and CI release workflow)
+dist-mcpb/
+*.mcpb
+
 # MCPB bundles
 *.mcpb

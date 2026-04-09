@@ -3,40 +3,41 @@ name: CI
 on:
   push:
     branches: [main, master]
+    tags: ['v*']
   pull_request:
     branches: [main, master]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         node-version: [18.x, 20.x, 22.x]
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-      
+
       - name: Install dependencies
         run: npm install
-      
+
       - name: Build TypeScript
         run: npm run build
-      
+
       - name: Run tests
         run: npm test
-      
+
       - name: Verify CLI
         run: |
           node dist/cli.js --help
           node dist/cli.js status || true
-      
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         if: matrix.node-version == '20.x'
@@ -47,44 +48,103 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
-      
+
       - name: Install dependencies
         run: npm install
-      
+
       - name: Check TypeScript
         run: npx tsc --noEmit
 
-  release:
+  # Build the MCPB (Claude Desktop extension) bundle for each supported
+  # platform. Runs on tag pushes only — wasted CI minutes otherwise.
+  # Each runner produces a platform-specific .mcpb because better-sqlite3
+  # ships a native binary that can't be cross-built.
+  mcpb:
     needs: [build, lint]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    
+    if: startsWith(github.ref, 'refs/tags/v')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest      # darwin-arm64 (Apple Silicon)
+          - os: ubuntu-latest     # linux-x64
+          - os: windows-latest    # win32-x64
+    runs-on: ${{ matrix.os }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Install dependencies
+        run: npm install --no-fund --no-audit
+        shell: bash
+
+      - name: Build MCPB bundle
+        run: bash scripts/build-mcpb.sh
+        shell: bash
+
+      - name: Upload MCPB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcpb-${{ matrix.os }}
+          path: dist-mcpb/*.mcpb
+          retention-days: 7
+
+  # Tag-driven release: publishes to npm and creates a GitHub Release
+  # with all platform MCPB bundles attached. Triggered by `git push --tags`
+  # of a `v*` tag. Requires the NPM_TOKEN secret to be set in repo settings.
+  release:
+    needs: [build, lint, mcpb]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write   # needed by softprops/action-gh-release
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
           registry-url: 'https://registry.npmjs.org'
-      
+
       - name: Install dependencies
         run: npm install
-      
+
       - name: Build
         run: npm run build
-      
+
       - name: Publish to npm
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Download MCPB artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-mcpb
+          pattern: mcpb-*
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-mcpb/*.mcpb
+          generate_release_notes: true
+          fail_on_unmatched_files: true

@@ -336,7 +336,42 @@ Disk usage: approximately **2 GB per Minecraft version** (JAR ~60 MB, decompiled
 npm run build    # Compile TypeScript
 npm test         # Run tests
 npm run lint     # Lint code
+npm run mcpb     # Build a Claude Desktop MCPB bundle for the current platform
 ```
+
+## Releasing
+
+Releases are tag-driven. Pushing a `v*` tag triggers GitHub Actions to:
+
+1. Run the full test matrix and TypeScript checks
+2. Build platform-specific MCPB bundles on macOS, Linux, and Windows runners
+3. Publish the package to npm
+4. Create a GitHub Release with all `.mcpb` bundles attached
+
+To cut a release:
+
+```bash
+# 1. Bump the version (creates a commit + a v<version> tag)
+npm version patch          # or: minor, major, 1.2.3, etc.
+
+# 2. Push the commit and the new tag
+git push --follow-tags
+```
+
+That's it — the workflow at `.github/workflows/ci.yml` handles the rest. Required repository secret: **`NPM_TOKEN`** (an npm automation token with publish permission for this package; set under Settings → Secrets and variables → Actions).
+
+The MCPB build is also runnable locally:
+
+```bash
+npm run mcpb
+# → dist-mcpb/mcdev-mcp-<version>-<platform>-<arch>.mcpb
+```
+
+The native [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) binary is platform-specific, which is why each `.mcpb` is built on a matching runner rather than cross-built. macOS users get an arm64 build; Intel Mac support would require adding `macos-13` to the matrix.
+
+### Installing the MCPB in Claude Desktop
+
+Download the bundle for your platform from the [Releases page](https://github.com/weikengchen/mcdev-mcp/releases) and double-click the `.mcpb` file. Claude Desktop will validate the manifest and offer to install it. After install, run `mcdev-mcp init -v <version>` in a terminal once to populate the cache (the extension cannot trigger `init` itself — it's deliberately terminal-only, see [Quick Start](#quick-start)).
 
 ## Limitations
 
