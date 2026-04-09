@@ -37,6 +37,10 @@ export function getMinecraftJarPath(version: string): string {
   return path.join(getMinecraftCacheDir(version), 'jars', `${version}_unobfuscated.jar`);
 }
 
+export function getObfuscatedJarPath(version: string): string {
+  return path.join(getMinecraftCacheDir(version), 'jars', `${version}_obfuscated.jar`);
+}
+
 export function getFabricApiCacheDir(version: string): string {
   return path.join(getCacheDir(), `fabric-api-${version}`);
 }

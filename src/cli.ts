@@ -27,15 +27,21 @@ function isValidVersion(version: string): boolean {
   if (/^[2-9][0-9]*\./.test(version)) {
     return true;
   }
-  
-  // For 1.x.x versions, require >= 1.21.11
-  const match = version.match(/^1\.(\d+)\.(\d+)/);
-  if (match) {
-    const minor = parseInt(match[1], 10);
-    const patch = parseInt(match[2], 10);
-    return minor > 21 || (minor === 21 && patch >= 11);
+
+  // For 1.x.x versions (e.g. 1.19.4), require >= 1.14
+  const match3 = version.match(/^1\.(\d+)\.(\d+)/);
+  if (match3) {
+    const minor = parseInt(match3[1], 10);
+    return minor >= 14;
   }
-  
+
+  // For 1.x versions without patch (e.g. 1.19), require >= 1.14
+  const match2 = version.match(/^1\.(\d+)$/);
+  if (match2) {
+    const minor = parseInt(match2[1], 10);
+    return minor >= 14;
+  }
+
   return false;
 }
 
@@ -43,7 +49,7 @@ function validateVersion(version: string): void {
   if (!isValidVersion(version)) {
     console.error(`Error: Version ${version} is not supported.`);
     console.error('Supported versions:');
-    console.error('  - 1.21.11 and later (1.21.11, 1.21.12, 1.22.x, etc.)');
+    console.error('  - 1.14 and later (official Mojang mappings required)');
     console.error('  - 26.x and later (26.1, 26.1-snapshot-10, etc.)');
     process.exit(1);
   }

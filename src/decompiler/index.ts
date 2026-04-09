@@ -1,11 +1,20 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ensureVineflower, type ProgressCallback } from './tools.js';
-import { downloadClientJar } from './download.js';
+import { downloadClientJar, fetchVersionInfo, downloadMappings } from './download.js';
 import { decompile } from './vineflower.js';
+import {
+  needsRemapping,
+  ensureTinyRemapper,
+  convertProguardToTiny,
+  remapJar,
+  getMappingsPath,
+  getTinyMappingsPath,
+} from './remapper.js';
 import {
   getMinecraftSourceDir,
   getMinecraftJarPath,
+  getObfuscatedJarPath,
   getIndexDir,
   ensureHomeDirs,
   ensureDir,
@@ -37,13 +46,36 @@ export async function ensureDecompiled(
 
   if (!isDecompiled(version)) {
     const vineflowerJar = await ensureVineflower(progressCb);
+    const finalJarPath = getMinecraftJarPath(version);
+    ensureDir(path.dirname(finalJarPath));
 
-    const jarPath = getMinecraftJarPath(version);
-    ensureDir(path.dirname(jarPath));
-    
-    await downloadClientJar(version, jarPath, progressCb);
+    if (needsRemapping(version)) {
+      // Obfuscated version: download, remap, then decompile
+      const obfuscatedJarPath = getObfuscatedJarPath(version);
 
-    await decompile(vineflowerJar, jarPath, minecraftDir, progressCb);
+      if (!fs.existsSync(finalJarPath)) {
+        await downloadClientJar(version, obfuscatedJarPath, progressCb);
+
+        const versionInfo = await fetchVersionInfo(version);
+        const mappingsPath = getMappingsPath(version);
+        await downloadMappings(versionInfo, path.dirname(mappingsPath), progressCb);
+
+        await ensureTinyRemapper(progressCb);
+
+        const tinyPath = getTinyMappingsPath(version);
+        if (progressCb) progressCb('convert', 0, 'Converting ProGuard mappings to Tiny format...');
+        convertProguardToTiny(mappingsPath, tinyPath);
+        if (progressCb) progressCb('convert', 100, 'Mappings converted.');
+
+        await remapJar(obfuscatedJarPath, tinyPath, finalJarPath, progressCb);
+      }
+
+      await decompile(vineflowerJar, finalJarPath, minecraftDir, progressCb);
+    } else {
+      // Unobfuscated version: download directly and decompile
+      await downloadClientJar(version, finalJarPath, progressCb);
+      await decompile(vineflowerJar, finalJarPath, minecraftDir, progressCb);
+    }
   }
 
   return { minecraftDir, fabricDir: null, fabricVersion: null };
