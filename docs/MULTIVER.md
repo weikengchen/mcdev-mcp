@@ -17,7 +17,7 @@ This document outlines the implementation plan for supporting multiple Minecraft
 ### Current State
 
 ```
-~/.mcdev-mcp/
+<cache-dir>/
 ├── cache/
 │   └── 1.21.11/           # VERSIONED ✅
 │       └── client/        # Decompiled sources
@@ -32,7 +32,7 @@ This document outlines the implementation plan for supporting multiple Minecraft
 ### Target State
 
 ```
-~/.mcdev-mcp/
+<cache-dir>/
 ├── cache/
 │   ├── 1.21.1/
 │   │   └── client/

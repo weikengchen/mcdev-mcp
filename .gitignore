@@ -23,10 +23,10 @@ npm-debug.log*
 # Test
 coverage/
 
-# Cache (user-specific)
+# Cache (user-specific, legacy location — now lives in the OS cache dir via env-paths)
 .mcdev-mcp/
 
-# Decompiler artifacts (should be in ~/.mcdev-mcp/)
+# Decompiler artifacts (should live in the OS cache dir, see src/utils/paths.ts)
 lib/__pycache__/
 lib/mappings/
 lib/src/

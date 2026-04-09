@@ -33,7 +33,7 @@ This command:
 3. Builds the symbol index (classes, methods, fields, inheritance)
 4. Generates call graph for `mc_find_refs`
 
-Data is stored under `~/.mcdev-mcp/`, so it persists across `npx` invocations.
+Data is stored in your OS cache directory (see [Storage location](#storage-location) below), so it persists across `npx` invocations. Expect roughly **~2 GB per Minecraft version** — mostly decompiled `.java` sources and a SQLite callgraph database. All of it is regeneratable, so your OS is free to evict it under storage pressure and `init` will rebuild what it needs.
 
 ### 2. Add to your MCP client
 
@@ -298,16 +298,28 @@ mcdev-mcp/
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design documentation.
 
-## Directory Structure
+## Storage location
+
+`mcdev-mcp` stores all cached data in the OS-standard cache directory, courtesy of [`env-paths`](https://github.com/sindresorhus/env-paths). Everything under this directory is **regeneratable** — safe to delete at any time — and `init` will rebuild what it needs on next run.
+
+| Platform | Path |
+|---|---|
+| macOS   | `~/Library/Caches/mcdev-mcp` |
+| Linux   | `~/.cache/mcdev-mcp` (XDG-compliant, honours `$XDG_CACHE_HOME`) |
+| Windows | `%LOCALAPPDATA%\mcdev-mcp\Cache` |
+
+Disk usage: approximately **2 GB per Minecraft version** (JAR ~60 MB, decompiled sources ~1.8 GB, callgraph DB ~200 MB, symbol index ~50 MB). Run `npx mcdev-mcp status` to see which versions are cached, and `npx mcdev-mcp clean --all` (or `clean -v <version> --all`) to reclaim space.
+
+### Layout
 
 ```
-~/.mcdev-mcp/
+<cache-dir>/
 ├── tools/
-│   └── vineflower.jar         # Downloaded once
-├── java-callgraph2/           # Call graph tool
+│   └── vineflower.jar         # Decompiler, downloaded once
+├── java-callgraph2/           # Call graph tool, cloned once
 ├── cache/
 │   └── {version}/
-│       ├── jars/               # Downloaded JARs
+│       ├── jars/               # Downloaded Minecraft client JARs
 │       └── client/             # Decompiled Minecraft sources
 ├── index/
 │   └── {version}/
@@ -315,6 +327,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design documentati
 │       └── minecraft/          # Per-package symbol indices
 └── tmp/                        # Temporary files (cleaned by --all)
 ```
+
+> **Upgrading from a pre-1.0 install?** Earlier versions stored everything under `~/.mcdev-mcp/`. If you have data there and want to keep it, move it manually to the new location (e.g. on macOS: `mv ~/.mcdev-mcp ~/Library/Caches/mcdev-mcp`). Otherwise just run `init` again — the download step is idempotent.
 
 ## Development
 

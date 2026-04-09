@@ -1,12 +1,19 @@
 import * as path from 'path';
-import * as os from 'os';
 import * as fs from 'fs';
+import envPaths from 'env-paths';
 import { Config, DEFAULT_CONFIG } from './config.js';
 
-const MCDEV_DIR = '.mcdev-mcp';
+// Platform-idiomatic cache location. env-paths gives us:
+//   macOS:   ~/Library/Caches/mcdev-mcp
+//   Linux:   ~/.cache/mcdev-mcp (XDG)
+//   Windows: %LOCALAPPDATA%\mcdev-mcp\Cache
+// Everything we store (JARs, decompiled sources, indices, callgraph DB) is
+// regeneratable from upstream, so it all belongs under 'cache' — the OS is
+// free to evict it and `init` will rebuild what it needs.
+const MCDEV_PATHS = envPaths('mcdev-mcp', { suffix: '' });
 
 export function getHomeDir(): string {
-  return path.join(os.homedir(), MCDEV_DIR);
+  return MCDEV_PATHS.cache;
 }
 
 export function getCacheDir(): string {

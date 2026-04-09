@@ -3,9 +3,11 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 describe('Paths utilities', () => {
-  test('getHomeDir returns correct path', () => {
+  test('getHomeDir returns a path containing the mcdev-mcp cache folder', () => {
     const home = getHomeDir();
-    expect(home).toContain('.mcdev-mcp');
+    expect(home).toContain('mcdev-mcp');
+    // Should live under an OS-standard cache location — not a dotfile directly in $HOME.
+    expect(home).not.toMatch(/\/\.mcdev-mcp$/);
   });
   
   test('getCacheDir returns correct path', () => {

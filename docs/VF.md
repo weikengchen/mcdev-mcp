@@ -21,7 +21,7 @@ Replace DecompilerMC with Vineflower. Eliminate Python/git dependencies.
 ```typescript
 ensureVineflower(progressCb?: ProgressCallback): Promise<string>
 ```
-Downloads vineflower.jar to `~/.mcdev-mcp/tools/` if missing. Returns path.
+Downloads vineflower.jar to `<cache-dir>/tools/` if missing. Returns path.
 
 ### `src/decompiler/download.ts`
 
@@ -89,7 +89,7 @@ Simplified flow:
 ## Directory Structure
 
 ```
-~/.mcdev-mcp/
+<cache-dir>/
 ├── cache/<version>/client/    # Final decompiled sources
 ├── index/<version>/           # Search indices
 ├── tools/

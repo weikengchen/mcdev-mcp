@@ -80,7 +80,7 @@ Implements the four MCP tools:
 Manages DecompilerMC:
 - Clones repository on first run
 - Executes decompilation pipeline
-- Caches results in `~/.mcdev-mcp/cache/`
+- Caches results in `<cache-dir>/cache/`
 
 **Pipeline:**
 1. Download official Minecraft JAR
@@ -97,7 +97,7 @@ Parses decompiled Java sources and builds a searchable index:
 
 **Index Structure:**
 ```
-~/.mcdev-mcp/index/
+<cache-dir>/index/
 ├── manifest.json              # Metadata
 └── minecraft/
     ├── net.minecraft.client.json

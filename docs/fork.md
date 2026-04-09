@@ -18,8 +18,8 @@ src/decompiler/index.ts
   └── cloneDecompilerMC()     → clones repo (libs only, skip if exists)
   └── runDecompilerMC()       → python3 <our-main.py> --mcversion <version> --side client -q
                                 └── our main.py lives in mcdev-mcp/lib/DecompilerMC-main.py
-                                └── uses --lib-dir to find jars in ~/.mcdev-mcp/DecompilerMC/lib/
-                                └── outputs to ~/.mcdev-mcp/DecompilerMC/src/<version>/client/
+                                └── uses --lib-dir to find jars in <cache-dir>/DecompilerMC/lib/
+                                └── outputs to <cache-dir>/DecompilerMC/src/<version>/client/
 ```
 
 ## ✅ Phase 1: Modify lib/DecompilerMC-main.py (DONE)
