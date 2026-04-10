@@ -27,11 +27,11 @@
   ],
   "server": {
     "type": "node",
-    "entry_point": "dist/cli.js",
+    "entry_point": "dist/mcpb-bootstrap.js",
     "mcp_config": {
       "command": "node",
       "args": [
-        "${__dirname}/dist/cli.js",
+        "${__dirname}/dist/mcpb-bootstrap.js",
         "serve"
       ],
       "env": {}

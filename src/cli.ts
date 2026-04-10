@@ -1,17 +1,43 @@
 #!/usr/bin/env node
 
+// Debug helper: opt-in lifecycle logging to a file on disk. See the matching
+// block in src/mcpb-bootstrap.ts for the full rationale — the short version
+// is that stderr under the Claude Desktop MCPB host can raise async EPIPE
+// and kill the process, so all debug logging goes to a file instead.
+//
+// MCDEV_MCP_DEBUG_LOG:
+//   unset / empty / "off" → disabled (default)
+//   "on"                  → /tmp/mcdev-debug.log
+//   any other value       → used as the log file path
+import * as fsForDebug from 'fs';
+
+const DEBUG_LOG_PATH_CLI = (() => {
+  const override = process.env.MCDEV_MCP_DEBUG_LOG;
+  if (!override || override === 'off') return null;
+  if (override === 'on') return '/tmp/mcdev-debug.log';
+  return override;
+})();
+
+function bootLog(msg: string): void {
+  if (!DEBUG_LOG_PATH_CLI) return;
+  // File-only on purpose: writing to stderr under the Claude Desktop MCPB
+  // host raises async EPIPE and crashes us. See src/mcpb-bootstrap.ts.
+  const stamped = `[${new Date().toISOString()}] [mcdev-mcp cli] ${msg}`;
+  try { fsForDebug.appendFileSync(DEBUG_LOG_PATH_CLI, stamped + '\n'); } catch {}
+}
+
 import * as fs from 'fs';
 import * as path from 'path';
 import { Command } from 'commander';
 import { ensureDecompiled } from './decompiler/index.js';
 import { buildIndex, loadIndexManifest } from './indexer/index.js';
-import { 
-  getMinecraftSourceDir, 
-  ensureHomeDirs, 
-  getHomeDir, 
-  getAvailableMinecraftVersions, 
-  getCacheDir, 
-  getIndexDir, 
+import {
+  getMinecraftSourceDir,
+  ensureHomeDirs,
+  getHomeDir,
+  getAvailableMinecraftVersions,
+  getCacheDir,
+  getIndexDir,
   getMinecraftCacheDir,
   getIndexedVersions,
   isVersionIndexed,
@@ -19,6 +45,8 @@ import {
 } from './utils/paths.js';
 import { ensureCallgraph, hasCallgraphDb, getCallgraphStats } from './callgraph/index.js';
 import { startServer } from './index.js';
+
+bootLog('module loaded — all top-level imports resolved');
 
 const program = new Command();
 
@@ -64,10 +92,13 @@ program
   .command('serve')
   .description('Start the MCP server over stdio (used by MCP clients, not humans)')
   .action(async () => {
+    bootLog('serve action entered — calling startServer()');
     try {
       await startServer();
+      bootLog('startServer() resolved — waiting for stdio messages');
     } catch (error) {
-      console.error('Fatal error:', error);
+      const msg = error instanceof Error ? (error.stack ?? error.message) : String(error);
+      try { process.stderr.write(`[mcdev-mcp serve fatal] ${msg}\n`); } catch {}
       process.exit(1);
     }
   });
