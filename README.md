@@ -3,18 +3,25 @@
 [![CI](https://github.com/weikengchen/mcdev-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/weikengchen/mcdev-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An **MCP (Model Context Protocol) server** that empowers AI coding agents to work effectively with Minecraft mod development. Provides accurate, up-to-date access to decompiled Minecraft source code using official Mojang mappings.
+An **MCP (Model Context Protocol) server** that empowers AI coding agents to work effectively with Minecraft mod development. Provides both **static analysis** of decompiled source code and **runtime interaction** with a running Minecraft instance.
 
 ## Features
 
+### Static Analysis (work offline)
 - **Decompiled Source Access** — Auto-downloads and decompiles Minecraft client using [Vineflower](https://github.com/Vineflower/vineflower)
 - **Dev Snapshot Support** — Works with development snapshots (e.g., `26.1-snapshot-10`) that lack ProGuard mappings
-- **Symbol Search** — Search for classes, methods, and fields by name
+- **Symbol Search** — Search for classes, methods, and fields by name (`mc_search`)
 - **Source Retrieval** — Get full class source or individual methods with context
 - **Package Exploration** — List all classes under a package path or discover available packages
 - **Class Hierarchy** — Find subclasses and interface implementors
 - **Call Graph Analysis** — Find method callers and callees across the entire codebase
-- **Zero Configuration** — Auto-initializes on first use if sources are cached
+
+### Runtime Interaction (requires [DebugBridge](https://github.com/weikengchen/debugbridge) mod)
+- **Live Lua Execution** — Execute Lua scripts inside the running Minecraft JVM (`mc_execute`)
+- **Game State Snapshots** — Get player position, health, dimension, time, weather (`mc_snapshot`)
+- **Screenshots** — Capture the game window as JPEG (`mc_screenshot`)
+- **Slash Commands** — Execute in-game commands (`mc_run_command`)
+- **Runtime Method Tracing** — Inject loggers into methods to trace calls (`mc_logger`)
 
 ## Quick Start
 
@@ -76,7 +83,7 @@ npx mcdev-mcp callgraph -v 1.21.11
 npx mcdev-mcp status
 ```
 
-> **Note:** The `mc_set_version` tool must be called before using any other MCP tools. If the version isn't initialized, the AI will be instructed to ask you to run `init`.
+> **Note:** `mc_version` (with `action: "set"`) must be called before using any other static MCP tools. If the version isn't initialized, the AI will be instructed to ask you to run `init`.
 
 ### Install from source (development)
 
@@ -95,32 +102,31 @@ node dist/cli.js serve         # stdio MCP server; MCP clients launch this
 
 ## MCP Tools
 
-### Version Management
+### Version Management (Static Tools)
 
-Before using any other tools, set the active Minecraft version:
+Before using static tools, set the active Minecraft version:
 
-### `mc_set_version`
-Set the active Minecraft version for this session. Must be called before other tools.
+### `mc_version`
+Manage the active Minecraft version. Call with `action: "set"` before other static tools, or `action: "list"` to see what's initialized.
 
 ```json
 {
+  "action": "set",
   "version": "1.21.11"
 }
 ```
 
-### `mc_list_versions`
-List all Minecraft versions that have been initialized.
-
 ```json
-{}
+{
+  "action": "list"
+}
 ```
 
-### Tool Requirements
+### Static Tool Requirements
 
 | Tool | Requires `init` | Requires `callgraph` |
 |------|-----------------|---------------------|
-| `mc_set_version` | - | - |
-| `mc_list_versions` | - | - |
+| `mc_version` | - | - |
 | `mc_search` | ✓ | - |
 | `mc_get_class` | ✓ | - |
 | `mc_get_method` | ✓ | - |
@@ -130,7 +136,7 @@ List all Minecraft versions that have been initialized.
 | `mc_find_refs` | ✓ | ✓ |
 
 ### `mc_search`
-Search for Minecraft classes, methods, or fields by name pattern.
+Search decompiled source code for classes, methods, or fields by name pattern.
 
 ```json
 {
@@ -214,6 +220,89 @@ Find classes that extend or implement a given class or interface.
 | `subclasses` | Classes that extend this class |
 | `implementors` | Classes that implement this interface |
 
+---
+
+### Runtime Tools
+
+These tools require Minecraft to be running with the [DebugBridge](https://github.com/weikengchen/debugbridge) mod installed.
+
+### `mc_connect`
+Connect to a running Minecraft instance. Other runtime tools auto-connect if needed. Pass `reset: true` to disconnect and clear state before reconnecting (useful when switching instances). If `port` is omitted, scans ports 9876-9885.
+
+```json
+{
+  "port": 9876,
+  "reset": false
+}
+```
+
+### `mc_execute`
+Execute Lua code in the running game. The Lua environment persists across calls.
+
+```lua
+local mc = java.import("net.minecraft.client.Minecraft"):getInstance()
+local player = mc.player
+return player:blockPosition():toShortString()
+```
+
+### `mc_snapshot`
+Get a structured snapshot of current game state (player, world, time, weather).
+
+```json
+{}
+```
+
+### `mc_screenshot`
+Capture the game window as a JPEG file and return its path.
+
+```json
+{
+  "downscale": 2,
+  "quality": 0.75
+}
+```
+
+### `mc_run_command`
+Execute a Minecraft slash command.
+
+```json
+{
+  "command": "/give @s minecraft:diamond 64"
+}
+```
+
+### `mc_logger`
+Manage runtime method loggers for tracing Minecraft method calls. Uses Java Agent instrumentation to capture method entry/exit, arguments, return values, and timing.
+
+Inject a logger (writes to a file on the machine running the mod):
+
+```json
+{
+  "action": "inject",
+  "method": "net.minecraft.client.Minecraft.tick",
+  "duration_seconds": 60
+}
+```
+
+Cancel an active logger:
+
+```json
+{
+  "action": "cancel",
+  "id": 1
+}
+```
+
+List active loggers:
+
+```json
+{
+  "action": "list"
+}
+```
+
+> **Note:** This modifies bytecode at runtime. Avoid targeting hot-path methods. Optional filters (`throttle`, `arg_contains`, `arg_instanceof`, `sample`) can reduce log volume.
+
 ## Requirements
 
 | Dependency | Version | Purpose |
@@ -256,8 +345,10 @@ mcdev-mcp/
 ├── src/
 │   ├── index.ts              # MCP server entry point
 │   ├── cli.ts                # CLI commands
-│   ├── tools/                # MCP tool implementations
-│   ├── decompiler/           # Vineflower integration (pure TypeScript/Java)
+│   ├── tools/
+│   │   ├── static/           # Decompiled source tools
+│   │   └── runtime/          # DebugBridge runtime tools
+│   ├── decompiler/           # Vineflower integration
 │   ├── indexer/              # Symbol index builder
 │   ├── callgraph/            # Call graph generation & queries
 │   └── storage/              # Source & index storage
@@ -271,29 +362,31 @@ mcdev-mcp/
 │                     MCP Client (AI Agent)                    │
 └─────────────────────────────────────────────────────────────┘
                               │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      mcdev-mcp Server                        │
-│  ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐       │
-│  │ search  │ │get_class │ │get_method│ │ find_refs │       │
-│  └────┬────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘       │
-│  ┌─────────────┐ ┌───────────────┐ ┌─────────────────┐     │
-│  │list_classes │ │list_packages  │ │ find_hierarchy  │     │
-│  └──────┬──────┘ └───────┬───────┘ └────────┬────────┘     │
-│         └────────────────┼──────────────────┘              │
-│                          │                                  │
-│       ┌──────────────────┴───────────────────┐             │
-│       ▼                                       ▼             │
-│  ┌──────────┐                          ┌─────────────┐      │
-│  │  Index   │                          │  Callgraph  │      │
-│  │ (JSON)   │                          │  (SQLite)   │      │
-│  └────┬─────┘                          └──────┬──────┘      │
-└───────┼────────────────────────────────────────┼────────────┘
-        ▼                                        ▼
-┌───────────────────┐                  ┌─────────────────────┐
-│ Decompiled Src    │                  │ java-callgraph2     │
-│ (Vineflower)      │                  │ (static analysis)   │
-└───────────────────┘                  └─────────────────────┘
+         ┌────────────────────┴────────────────────┐
+         ▼                                          ▼
+┌─────────────────────────────┐    ┌─────────────────────────────┐
+│      Static Tools           │    │       Runtime Tools          │
+│  ┌────────────────────────┐ │    │  ┌────────────────────────┐ │
+│  │ mc_search              │ │    │  │ mc_execute             │ │
+│  │ mc_get_class/method    │ │    │  │ mc_snapshot            │ │
+│  │ mc_find_refs           │ │    │  │ mc_screenshot          │ │
+│  │ mc_find_hierarchy      │ │    │  │ mc_run_command         │ │
+│  │ mc_list_classes/pkgs   │ │    │  │ mc_logger              │ │
+│  └───────────┬────────────┘ │    │  └───────────┬────────────┘ │
+│              │              │    │              │              │
+│       ┌──────┴──────┐       │    │      ┌───────┴───────┐      │
+│       ▼             ▼       │    │      ▼               │      │
+│  ┌─────────┐  ┌──────────┐  │    │  ┌─────────────┐     │      │
+│  │  Index  │  │Callgraph │  │    │  │  WebSocket  │     │      │
+│  │ (JSON)  │  │ (SQLite) │  │    │  │ to Minecraft│     │      │
+│  └────┬────┘  └────┬─────┘  │    │  └──────┬──────┘     │      │
+└───────┼────────────┼────────┘    └─────────┼────────────┘
+        ▼            ▼                       ▼
+┌───────────────────────────┐      ┌─────────────────────────────┐
+│ Decompiled Src (local)    │      │ DebugBridge Mod (in game)   │
+│ (Vineflower)              │      │ github.com/weikengchen/     │
+└───────────────────────────┘      │ debugbridge                 │
+                                   └─────────────────────────────┘
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design documentation.
@@ -375,8 +468,9 @@ Download the bundle for your platform from the [Releases page](https://github.co
 
 ## Limitations
 
-- **Static Analysis Only**: `mc_find_refs` cannot trace calls through reflection, JNI callbacks, or lambda/method references created dynamically
-- **Client Only**: Server-side classes are not included
+- **Static Analysis**: `mc_find_refs` cannot trace calls through reflection, JNI callbacks, or lambda/method references created dynamically
+- **Client Only**: Server-side classes are not included in static analysis
+- **Runtime Tools**: Require Minecraft running with the [DebugBridge](https://github.com/weikengchen/debugbridge) mod installed
 
 ## Legal Notice
 

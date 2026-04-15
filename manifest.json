@@ -4,8 +4,8 @@
   "name": "mcdev-mcp",
   "display_name": "Minecraft Dev MCP",
   "version": "1.0.0",
-  "description": "MCP server for Minecraft mod development - provides decompiled code access and symbol search",
-  "long_description": "An MCP server that gives AI assistants access to decompiled Minecraft source code for Fabric modding. Supports browsing classes, methods, packages, searching symbols, finding class hierarchies, and cross-references across multiple Minecraft versions.",
+  "description": "MCP server for Minecraft mod development - decompiled code access, symbol search, and runtime interaction via DebugBridge",
+  "long_description": "An MCP server for AI-assisted Minecraft mod development. Static tools provide access to decompiled Minecraft source code: browse classes and methods, search symbols, explore package hierarchies, find subclasses/implementors, and trace callers/callees across multiple Minecraft versions. Runtime tools interact with a running Minecraft instance through the DebugBridge mod: execute Lua inside the JVM, capture game state snapshots and screenshots, run slash commands, and inject runtime method loggers.",
   "author": {
     "name": "weikengchen",
     "url": "https://github.com/weikengchen"
@@ -23,7 +23,9 @@
     "fabric",
     "modding",
     "decompiler",
-    "java"
+    "java",
+    "debugbridge",
+    "runtime"
   ],
   "server": {
     "type": "node",
@@ -38,15 +40,20 @@
     }
   },
   "tools": [
-    { "name": "mc_set_version", "description": "Set the active Minecraft version for subsequent queries" },
-    { "name": "mc_list_versions", "description": "List all available Minecraft versions" },
-    { "name": "mc_search", "description": "Search for classes, methods, and fields by name" },
+    { "name": "mc_version", "description": "Set or list the active Minecraft version for static analysis tools" },
+    { "name": "mc_search", "description": "Search decompiled source for classes, methods, and fields by name" },
     { "name": "mc_get_class", "description": "Get the decompiled source code of a class" },
     { "name": "mc_get_method", "description": "Get the decompiled source of a specific method" },
-    { "name": "mc_list_classes", "description": "List all classes in a package" },
+    { "name": "mc_list_classes", "description": "List all classes in a package path" },
     { "name": "mc_list_packages", "description": "List all packages in the Minecraft source" },
-    { "name": "mc_find_hierarchy", "description": "Find the class hierarchy (superclasses and subclasses)" },
-    { "name": "mc_find_refs", "description": "Find references to a class or method" }
+    { "name": "mc_find_hierarchy", "description": "Find subclasses or interface implementors of a class" },
+    { "name": "mc_find_refs", "description": "Find callers or callees of a method via the callgraph" },
+    { "name": "mc_connect", "description": "Connect to a running Minecraft instance via the DebugBridge mod" },
+    { "name": "mc_execute", "description": "Execute Lua code inside the running Minecraft JVM" },
+    { "name": "mc_snapshot", "description": "Get a structured snapshot of current game state" },
+    { "name": "mc_screenshot", "description": "Capture the Minecraft client framebuffer as a JPEG file" },
+    { "name": "mc_run_command", "description": "Execute a Minecraft slash command" },
+    { "name": "mc_logger", "description": "Inject, cancel, or list runtime method loggers" }
   ],
   "compatibility": {
     "platforms": ["darwin", "win32", "linux"],

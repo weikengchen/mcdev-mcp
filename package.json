@@ -1,7 +1,7 @@
 {
   "name": "mcdev-mcp",
   "version": "1.0.0",
-  "description": "MCP server for Minecraft mod development - provides decompiled code access and symbol search",
+  "description": "MCP server for Minecraft mod development - provides decompiled code access, symbol search, and runtime interaction via DebugBridge",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -49,7 +49,8 @@
     "commander": "^12.0.0",
     "env-paths": "^4.0.0",
     "glob": "^10.0.0",
-    "unzipper": "^0.12.3"
+    "unzipper": "^0.12.3",
+    "ws": "^8.16.0"
   },
   "devDependencies": {
     "@anthropic-ai/mcpb": "^2.1.2",
@@ -57,6 +58,7 @@
     "@types/jest": "^29.5.0",
     "@types/node": "^20.10.0",
     "@types/unzipper": "^0.10.10",
+    "@types/ws": "^8.5.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.0",
     "typescript": "^5.3.0"
