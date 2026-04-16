@@ -51,8 +51,8 @@ Or for full reinitialization:
     }
 
     const results = args.direction === 'callers'
-      ? findCallers(version, args.className, args.methodName)
-      : findCallees(version, args.className, args.methodName);
+      ? await findCallers(version, args.className, args.methodName)
+      : await findCallees(version, args.className, args.methodName);
 
     if (results.length === 0) {
       return {

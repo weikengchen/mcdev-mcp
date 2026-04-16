@@ -13,9 +13,9 @@ jobs:
 
     strategy:
       matrix:
-        # node:sqlite is experimental in 22.5+ and stable in 24. We don't
-        # support older Node anymore — the built-in is a hard requirement.
-        node-version: [22.x, 24.x]
+        # sql.js (WASM) works on Node 14+, so we cover the active LTS line.
+        # The lower bound matches package.json engines (>=18.0.0).
+        node-version: [18.x, 20.x, 22.x, 24.x]
 
     steps:
       - name: Checkout repository
@@ -69,7 +69,7 @@ jobs:
   # Build the MCPB (Claude Desktop extension) bundle. Runs on tag pushes
   # only — wasted CI minutes otherwise.
   #
-  # We still build per-platform even though node:sqlite has no native
+  # We still build per-platform even though sql.js (WASM) has no native
   # binary, because the bundle's filename and smoke test still encode
   # platform/arch via process.platform/process.arch. Consolidating to a
   # single cross-platform bundle is a follow-up; leaving it alone here

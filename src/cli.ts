@@ -138,7 +138,7 @@ program
       if (options.skipCallgraph) {
         console.log(`  Callgraph: skipped (run 'mcdev-mcp callgraph -v ${options.version}' to generate)`);
       } else {
-        const stats = getCallgraphStats(options.version);
+        const stats = await getCallgraphStats(options.version);
         if (stats) {
           console.log(`  Callgraph: ${stats.totalCalls} call references`);
         }
@@ -174,8 +174,8 @@ program
     
     try {
       await ensureCallgraph(options.version, progressCb);
-      
-      const stats = getCallgraphStats(options.version);
+
+      const stats = await getCallgraphStats(options.version);
       if (stats) {
         console.log('\n✓ Callgraph database ready!');
         console.log(`  Total call references: ${stats.totalCalls}`);
@@ -232,72 +232,72 @@ program
   .command('status')
   .description('Show current status of all cached Minecraft versions')
   .option('-v, --version <version>', 'Show status for specific version')
-  .action((options) => {
+  .action(async (options) => {
     ensureHomeDirs();
-    
+
     const indexedVersions = getIndexedVersions();
     const cachedVersions = getAvailableMinecraftVersions();
-    
+
     if (options.version) {
-      showVersionStatus(options.version, cachedVersions, indexedVersions);
+      await showVersionStatus(options.version, cachedVersions, indexedVersions);
       return;
     }
-    
+
     if (cachedVersions.length === 0) {
       console.log('Status: Not initialized');
       console.log('Run `mcdev-mcp init -v <version>` to set up.');
       return;
     }
-    
+
     console.log('Cached Minecraft versions:\n');
-    
+
     for (const version of cachedVersions) {
       const manifest = loadIndexManifest(version);
       const hasCallgraph = hasCallgraphDb(version);
       const isIndexed = indexedVersions.includes(version);
-      
+
       console.log(`  ${version}:`);
       console.log(`    Decompiled: ✓`);
       console.log(`    Indexed: ${isIndexed ? '✓' : '✗'}`);
-      
+
       if (isIndexed && manifest) {
         console.log(`    Packages: ${manifest.packages.minecraft.length} Minecraft, ${manifest.packages.fabric.length} Fabric`);
       }
-      
+
       console.log(`    Callgraph: ${hasCallgraph ? '✓' : '✗'}`);
-      
+
       if (hasCallgraph) {
-        const stats = getCallgraphStats(version);
+        const stats = await getCallgraphStats(version);
         if (stats) {
           console.log(`    Call refs: ${stats.totalCalls}`);
         }
       }
-      
+
       console.log();
     }
-    
+
     console.log(`Total: ${cachedVersions.length} version(s) cached`);
   });
 
-function showVersionStatus(version: string, cachedVersions: string[], indexedVersions: string[]): void {
+async function showVersionStatus(version: string, cachedVersions: string[], indexedVersions: string[]): Promise<void> {
   const isCached = cachedVersions.includes(version);
   const isIndexed = indexedVersions.includes(version);
   const hasCallgraph = hasCallgraphDb(version);
-  
+
   console.log(`\nMinecraft ${version}:`);
   console.log(`  Decompiled: ${isCached ? '✓' : '✗'}`);
   console.log(`  Indexed: ${isIndexed ? '✓' : '✗'}`);
   console.log(`  Callgraph: ${hasCallgraph ? '✓' : '✗'}`);
-  
+
   if (isIndexed) {
     const manifest = loadIndexManifest(version);
     if (manifest) {
       console.log(`  Packages: ${manifest.packages.minecraft.length} Minecraft, ${manifest.packages.fabric.length} Fabric`);
       console.log(`  Generated: ${manifest.generated}`);
     }
-    
+
     if (hasCallgraph) {
-      const stats = getCallgraphStats(version);
+      const stats = await getCallgraphStats(version);
       if (stats) {
         console.log(`  Call refs: ${stats.totalCalls}`);
         console.log(`  Unique callers: ${stats.uniqueCallers}`);

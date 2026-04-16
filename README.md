@@ -460,7 +460,7 @@ npm run mcpb
 # → dist-mcpb/mcdev-mcp-<version>-<platform>-<arch>.mcpb
 ```
 
-The bundle is pure JavaScript (it uses the built-in [`node:sqlite`](https://nodejs.org/api/sqlite.html) module, so there is no native binary to ship). Builds still run per-platform to exercise the smoke test on each OS and to stamp the platform/arch into the filename; macOS users get an arm64 build, Intel Mac support would require adding `macos-13` to the matrix.
+The bundle is pure JavaScript + WebAssembly (it uses [`sql.js`](https://github.com/sql-js/sql.js), SQLite compiled to WASM, so there is no native binary to ship and no Node-version requirement beyond ≥18). Builds still run per-platform to exercise the smoke test on each OS and to stamp the platform/arch into the filename; macOS users get an arm64 build, Intel Mac support would require adding `macos-13` to the matrix.
 
 ### Installing the MCPB in Claude Desktop
 

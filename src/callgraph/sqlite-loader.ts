@@ -1,56 +1,59 @@
-// Lazy-load the node:sqlite built-in.
+// Load sql.js (SQLite compiled to WebAssembly).
 //
-// Why not a top-level `import { DatabaseSync } from 'node:sqlite'`? On Node
-// runtimes older than 22.5.0 that import throws ERR_UNKNOWN_BUILTIN_MODULE
-// during module evaluation, which kills the entire MCP server before any
-// stdio handshake completes. Runtime tools (mc_connect, mc_execute,
-// mc_snapshot, ...) talk to DebugBridge over WebSocket and don't need
-// sqlite at all — they should keep working on Node 18+ even though the
-// static-analysis tools (mc_find_refs, callgraph indexing) require >=22.5.
+// Why sql.js? Earlier iterations went through two failed approaches:
+//   1. better-sqlite3 — native module, NODE_MODULE_VERSION pinned. Broke every
+//      time Claude Desktop bumped Electron, and macOS Team ID enforcement on
+//      dlopen made cross-host loads non-portable.
+//   2. node:sqlite (Node built-in) — only available on Node >= 22.5.0. Broke
+//      users running the CLI on Node 18 or 20.
 //
-// We resolve sqlite synchronously via createRequire so the existing
-// query/parser code stays sync. The loader caches both the resolved
-// constructor and any load error, so repeated calls don't re-throw the
-// underlying ERR_UNKNOWN_BUILTIN_MODULE noise.
+// sql.js is pure JavaScript + WebAssembly: no native bindings, no Electron
+// ABI coupling, no Team ID dance, works on Node 14+ without flags. The
+// trade-offs are async init (WASM has to be instantiated), slightly higher
+// memory use than a native build, and the whole DB is loaded into memory
+// (sql.js doesn't do incremental disk I/O). For our callgraph workload — a
+// few hundred MB queried at MCP-tool granularity — none of that matters.
+//
+// The on-disk file format is plain SQLite, so existing callgraph.db files
+// from the better-sqlite3 / node:sqlite era load without any migration.
 
-import type { DatabaseSync as DatabaseSyncType } from 'node:sqlite';
+import type initSqlJsType from 'sql.js';
+import type { SqlJsStatic } from 'sql.js';
 import { createRequire } from 'node:module';
+import * as path from 'node:path';
 
 const _require = createRequire(import.meta.url);
-let _DatabaseSync: typeof DatabaseSyncType | null = null;
-let _sqliteError: Error | null = null;
 
-export function requireSqlite(): typeof DatabaseSyncType {
-  if (_DatabaseSync) return _DatabaseSync;
-  if (_sqliteError) throw _sqliteError;
-  try {
-    const mod = _require('node:sqlite') as { DatabaseSync: typeof DatabaseSyncType };
-    _DatabaseSync = mod.DatabaseSync;
-    return _DatabaseSync;
-  } catch (err) {
+// Cache the singleton SQL module — one WASM instantiation per process. The
+// promise itself is cached so concurrent first-callers all wait on the same
+// init rather than spawning multiple WASM instances.
+let _sqlJsPromise: Promise<SqlJsStatic> | null = null;
+
+export function loadSqlJs(): Promise<SqlJsStatic> {
+  if (_sqlJsPromise) return _sqlJsPromise;
+  _sqlJsPromise = (async () => {
+    // sql.js is a CommonJS module — go through createRequire so it resolves
+    // cleanly under our "type": "module" package.
+    const initSqlJs = _require('sql.js') as typeof initSqlJsType;
+
+    // Locate sql-wasm.wasm next to sql-wasm.js. We can't resolve
+    // 'sql.js/package.json' directly because the package's "exports" map
+    // doesn't expose package.json (Node refuses with ERR_PACKAGE_PATH_NOT_EXPORTED
+    // on >=20). Instead, resolve the main entry — which IS exported as "." —
+    // and take its dirname; that's already the dist/ directory since main
+    // points at dist/sql-wasm.js.
+    const mainPath = _require.resolve('sql.js');
+    const distDir = path.dirname(mainPath);
+
+    return await initSqlJs({
+      locateFile: (file: string) => path.join(distDir, file),
+    });
+  })().catch((err) => {
+    // Reset the cached promise on failure so a retry can re-attempt rather
+    // than serving the same rejection forever.
+    _sqlJsPromise = null;
     const msg = err instanceof Error ? err.message : String(err);
-    _sqliteError = new Error(
-      `node:sqlite is not available in this Node runtime (${process.version}). ` +
-      `mcdev-mcp's static-analysis tools (mc_find_refs, callgraph init) require ` +
-      `Node >= 22.5.0. Runtime tools (mc_connect, mc_execute, mc_snapshot, ` +
-      `mc_screenshot, mc_run_command, mc_logger) work fine on older Node — they ` +
-      `talk to DebugBridge over WebSocket and have no sqlite dependency. ` +
-      `Original error: ${msg}`
-    );
-    throw _sqliteError;
-  }
-}
-
-/**
- * Probe whether node:sqlite is loadable without throwing. Used by the MCPB
- * bootstrap preflight to log a non-fatal warning instead of crashing the
- * server when sqlite is missing.
- */
-export function isSqliteAvailable(): { ok: true } | { ok: false; error: string } {
-  try {
-    requireSqlite();
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
-  }
+    throw new Error(`Failed to initialize sql.js: ${msg}`);
+  });
+  return _sqlJsPromise;
 }

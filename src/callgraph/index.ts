@@ -3,7 +3,7 @@ import * as path from 'path';
 import { spawn } from 'child_process';
 import { ensureDir, getHomeDir, getMinecraftJarPath } from '../utils/paths.js';
 import { getCallgraphDir, getCallgraphDbPath } from './query.js';
-import { requireSqlite } from './sqlite-loader.js';
+import { loadSqlJs } from './sqlite-loader.js';
 
 const SPECIAL_SOURCE_VERSION = '1.11.4';
 
@@ -156,36 +156,39 @@ export function hasCallgraphDb(version: string): boolean {
   return fs.existsSync(getCallgraphDbPath(version));
 }
 
-export function parseCallgraphAndCreateDb(version: string, callgraphFile: string, progressCb?: ProgressCallback): number {
+export async function parseCallgraphAndCreateDb(version: string, callgraphFile: string, progressCb?: ProgressCallback): Promise<number> {
   if (progressCb) progressCb('index', 0, 'Parsing callgraph...');
-  
+
   const content = fs.readFileSync(callgraphFile, 'utf-8');
   const lines = content.split('\n');
   const dbPath = getCallgraphDbPath(version);
   if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-  
-  // Lazy-resolve so this module evaluates on Node <22.5 — see sqlite-loader.ts.
-  const DatabaseSyncCtor = requireSqlite();
-  const db = new DatabaseSyncCtor(dbPath);
+
+  // sql.js works in-memory; we serialize to disk with db.export() at the end.
+  // The on-disk format is plain SQLite, identical to what better-sqlite3 /
+  // node:sqlite would produce.
+  const SQL = await loadSqlJs();
+  const db = new SQL.Database();
   db.exec(`CREATE TABLE calls (id INTEGER PRIMARY KEY, caller_class TEXT, caller_method TEXT, caller_desc TEXT, callee_class TEXT, callee_method TEXT, callee_desc TEXT, line_number INTEGER); CREATE INDEX idx_callee ON calls(callee_class, callee_method); CREATE INDEX idx_caller ON calls(caller_class, caller_method);`);
 
   const insert = db.prepare('INSERT INTO calls VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)');
-  // node:sqlite has no db.transaction() helper, so wrap explicitly. Bulk
-  // INSERT without a surrounding transaction is ~1000x slower on SQLite.
+  // sql.js has no db.transaction() helper; wrap explicitly. Bulk INSERT
+  // without a surrounding transaction is ~1000x slower on SQLite.
+  // sql.js Statement.run takes a single array (not spread args).
   const insertMany = (items: any[][]) => {
     db.exec('BEGIN');
     try {
-      for (const item of items) insert.run(...item);
+      for (const item of items) insert.run(item);
       db.exec('COMMIT');
     } catch (e) {
       db.exec('ROLLBACK');
       throw e;
     }
   };
-  
+
   let count = 0;
   const batch: any[][] = [];
-  
+
   // Format: seq	num	caller	callee	line	return_type	...
   // caller format: class:method(args)
   // callee format: (TYPE)class:method(args) where TYPE is VIR/STA/SPE
@@ -193,16 +196,16 @@ export function parseCallgraphAndCreateDb(version: string, callgraphFile: string
     if (!line.trim() || line.startsWith('#')) continue;
     const parts = line.split('\t');
     if (parts.length < 5) continue;
-    
+
     const callerRaw = parts[2] || '';
     const calleeRaw = parts[3] || '';
     const lineNumber = parts[4] ? parseInt(parts[4], 10) : null;
-    
+
     // Parse caller: class:method(args)
     const callerMatch = callerRaw.match(/^(.+):(.+)(\([^)]*\))$/);
     // Parse callee: (TYPE)class:method(args)
     const calleeMatch = calleeRaw.match(/^\([A-Z]+\)(.+):(.+)(\([^)]*\))$/);
-    
+
     if (callerMatch && calleeMatch) {
       batch.push([
         callerMatch[1], callerMatch[2], callerMatch[3],
@@ -218,8 +221,15 @@ export function parseCallgraphAndCreateDb(version: string, callgraphFile: string
     }
   }
   if (batch.length > 0) { insertMany(batch); count += batch.length; }
+  insert.free();
   db.exec('PRAGMA optimize');
+
+  // Serialize in-memory DB to disk. db.export() returns a Uint8Array; wrap
+  // in Buffer so writeFileSync emits a plain binary file (no encoding).
+  const data = db.export();
+  fs.writeFileSync(dbPath, Buffer.from(data));
   db.close();
+
   if (progressCb) progressCb('index', 100, `Indexed ${count} call references.`);
   return count;
 }
@@ -227,7 +237,7 @@ export function parseCallgraphAndCreateDb(version: string, callgraphFile: string
 export async function ensureCallgraph(version: string, progressCb?: ProgressCallback): Promise<void> {
   if (hasCallgraphDb(version)) { if (progressCb) progressCb('callgraph', 100, 'Callgraph database ready.'); return; }
   const callgraphFile = await generateCallgraph(version, progressCb);
-  parseCallgraphAndCreateDb(version, callgraphFile, progressCb);
+  await parseCallgraphAndCreateDb(version, callgraphFile, progressCb);
 }
 
 export { openDb, closeDb, findCallers, findCallees, searchMethods, getCallgraphStats } from './query.js';

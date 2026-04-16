@@ -16,9 +16,10 @@
 # typescript, etc.), src/, tests/, docs/, and .github/. Staging gives us a
 # clean, prod-only tree.
 #
-# Note: we use the built-in node:sqlite module, so there are no native
-# dependencies to ship. Earlier versions of this script pinned better-sqlite3
-# prebuilds to a specific Electron ABI; that whole mechanism is gone now.
+# Note: we use sql.js (SQLite-as-WebAssembly), so there are no native
+# dependencies to ship. Earlier iterations pinned better-sqlite3 prebuilds to
+# a specific Electron ABI, then briefly relied on node:sqlite (Node >=22.5
+# only); both classes of failure are gone now.
 
 set -euo pipefail
 
@@ -66,12 +67,25 @@ cp manifest.json package.json "$STAGE/"
 cp -R dist "$STAGE/dist"
 
 echo ">> Installing production dependencies into staging dir..."
-# No native deps remain — node:sqlite is a built-in. This is now a
+# No native deps remain — sql.js is pure JS+WASM. This is now a
 # pure-JavaScript install.
 (
   cd "$STAGE"
   npm install --omit=dev --no-fund --no-audit --loglevel=error
 )
+
+# Prune the unused sql.js variants. The package ships ~37 MB of dist files
+# (asm.js, debug builds, browser-specific WASM, web-worker bundles) but we
+# only need the Node-targeted sql-wasm.{js,wasm} pair (≈700 KB total). The
+# saving matters for bundle download size and Claude Desktop install speed.
+SQLJS_DIST="$STAGE/node_modules/sql.js/dist"
+if [[ -d "$SQLJS_DIST" ]]; then
+  echo ">> Pruning unused sql.js variants in $SQLJS_DIST..."
+  find "$SQLJS_DIST" -type f \
+    ! -name 'sql-wasm.js' \
+    ! -name 'sql-wasm.wasm' \
+    -delete
+fi
 
 # ---------------------------------------------------------------------------
 # Smoke test the bootstrap.
@@ -90,8 +104,8 @@ echo ">> Installing production dependencies into staging dir..."
 # does catch, it fails the build loudly instead of shipping a bundle that
 # silently dies when a user installs it.
 #
-# node:sqlite requires Node >= 22.5.0; the build host must meet that too or
-# the preflight will fail here.
+# sql.js (WASM) works on Node 14+, so this smoke test runs on any host node
+# with the right LTS.
 #
 # How it works:
 #   1. Run `node dist/mcpb-bootstrap.js serve` in the background with
@@ -105,8 +119,8 @@ echo ">> Installing production dependencies into staging dir..."
 # is exactly the "idle and waiting" state we want to observe; we kill it
 # once we've seen it reach that state.
 #
-# Skippable via MCDEV_MCP_SKIP_SMOKE=1 for cases where the build host cannot
-# run Node 22.5+.
+# Skippable via MCDEV_MCP_SKIP_SMOKE=1 if the build host can't run the
+# bootstrap for any reason.
 # ---------------------------------------------------------------------------
 if [[ "${MCDEV_MCP_SKIP_SMOKE:-0}" == "1" ]]; then
   echo ">> Smoke test skipped (MCDEV_MCP_SKIP_SMOKE=1)"
@@ -167,11 +181,11 @@ else
   echo ">> Smoke test passed: bootstrap reached 'connected, ready for requests'"
 fi
 
-# Native-binary re-download and prebuild-pruning blocks used to live here.
-# They're gone now that we use the built-in node:sqlite — there is no .node
-# file to ship, and therefore no ABI mismatch or Team-ID dlopen failure to
-# worry about. The whole class of "Claude Desktop bumped Electron, our MCPB
-# silently died on load" bugs disappears.
+# Native-binary re-download blocks used to live here. They're gone now that
+# we use sql.js (WASM) — there is no .node file to ship, and therefore no
+# ABI mismatch or Team-ID dlopen failure to worry about. The whole class of
+# "Claude Desktop bumped Electron, our MCPB silently died on load" bugs
+# disappears.
 
 echo ">> Packing $OUTPUT..."
 "$MCPB" pack "$STAGE" "$OUTPUT"

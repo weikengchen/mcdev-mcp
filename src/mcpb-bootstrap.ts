@@ -19,13 +19,11 @@
 //      the debug log.
 //   2. Log environment info (Node version, NODE_MODULE_VERSION, platform,
 //      arch, argv, cwd).
-//   3. Preflight node:sqlite as a non-fatal probe — log whether the
-//      static-analysis tools will work, but don't kill the server if
-//      sqlite is missing. Runtime tools (mc_connect, mc_execute, ...) work
-//      fine without it. The Claude Desktop MCPB always runs in an Electron
-//      with Node >=22.5, so the preflight nearly always succeeds; the
-//      degraded path matters mostly for users running this server via
-//      npx/npm on a host with older Node.
+//   3. Preflight sql.js as a non-fatal probe — log whether the
+//      static-analysis tools will work, but don't kill the server if WASM
+//      init fails. Runtime tools (mc_connect, mc_execute, ...) work fine
+//      without it. sql.js works on Node 14+, so the preflight effectively
+//      always succeeds; we keep it as a breadcrumb in the boot log.
 //   4. Dynamically import ./cli.js so an error during its module evaluation
 //      is caught here and logged with a stack.
 //
@@ -107,33 +105,36 @@ boot(`MCDEV_MCP_DEBUG_LOG=${DEBUG_LOG_PATH ?? '(off)'}`);
 boot(`env.ELECTRON_RUN_AS_NODE=${process.env.ELECTRON_RUN_AS_NODE ?? '(unset)'}`);
 
 (async () => {
-  // Preflight: probe node:sqlite (built-in since 22.5.0 experimental, stable
-  // in 24.0.0). Non-fatal — the server still comes up if sqlite is missing,
-  // and runtime tools (mc_connect, mc_execute, ...) keep working. Only the
-  // static-analysis tools that touch the callgraph database will surface a
-  // clear runtime error when invoked.
+  // Preflight: probe sql.js (SQLite as WebAssembly). Non-fatal — the server
+  // still comes up if WASM init fails, and runtime tools (mc_connect,
+  // mc_execute, ...) keep working. Only the static-analysis tools that touch
+  // the callgraph database surface a clear runtime error when invoked.
   //
-  // We used to ship better-sqlite3 here, and it bit us hard: its native
-  // binding is pinned to NODE_MODULE_VERSION, Claude Desktop bumps Electron
-  // (and thus NODE_MODULE_VERSION) on its own schedule, and macOS Team ID
-  // checks made cross-host loads non-portable. Switching to the built-in
-  // eliminates the entire ABI-pinning class of failure.
-  boot('preflight: probing node:sqlite built-in...');
+  // History (why we keep arriving back at "is sqlite working?"):
+  //   1. better-sqlite3 — native module, NODE_MODULE_VERSION-pinned. Claude
+  //      Desktop bumps Electron on its own schedule and broke us every time;
+  //      macOS Team ID checks made cross-host loads non-portable.
+  //   2. node:sqlite (built-in) — only available on Node >= 22.5.0. Broke
+  //      users running this server on Node 18 or 20 via npx.
+  //   3. sql.js (current) — pure JS + WebAssembly, no native binding, no
+  //      Electron coupling, works on Node 14+. The preflight effectively
+  //      always succeeds; we keep it as a breadcrumb in the boot log.
+  boot('preflight: probing sql.js (WASM)...');
   try {
-    const { DatabaseSync } = await import('node:sqlite');
-    const probe = new DatabaseSync(':memory:');
-    const row = probe.prepare('select sqlite_version() as v').get() as { v?: string };
-    boot(`preflight: node:sqlite OK — sqlite_version=${row?.v ?? '(null)'}`);
+    const { loadSqlJs } = await import('./callgraph/sqlite-loader.js');
+    const SQL = await loadSqlJs();
+    const probe = new SQL.Database();
+    const row = probe.exec('select sqlite_version() as v')[0]?.values[0]?.[0];
+    boot(`preflight: sql.js OK — sqlite_version=${row ?? '(null)'}`);
     probe.close();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    boot(`preflight: node:sqlite UNAVAILABLE — ${msg}`);
+    boot(`preflight: sql.js UNAVAILABLE — ${msg}`);
     boot(
       `Static-analysis tools (mc_find_refs, callgraph init) will fail with ` +
       `a clear error when invoked. Runtime tools (mc_connect, mc_execute, ` +
       `mc_snapshot, mc_screenshot, mc_run_command, mc_logger) will work ` +
-      `normally. To enable the full feature set, run on Node >=22.5.0 ` +
-      `(current: node=${process.version} modules=${vers.modules}).`
+      `normally.`
     );
   }
 
