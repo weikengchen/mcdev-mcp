@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
 import { getMinecraftCacheDir } from '../utils/paths.js';
+import { requireSqlite, isSqliteAvailable } from './sqlite-loader.js';
 
 export function getCallgraphDir(version: string): string {
   return path.join(getMinecraftCacheDir(version), 'callgraph');
@@ -22,7 +23,9 @@ export function openDb(version: string): DatabaseSync {
     throw new Error('Callgraph database not found. Run `mcdev-mcp callgraph` first.');
   }
 
-  db = new DatabaseSync(dbPath, { readOnly: true });
+  // Lazy-resolve so this module evaluates on Node <22.5 — see sqlite-loader.ts.
+  const DatabaseSyncCtor = requireSqlite();
+  db = new DatabaseSyncCtor(dbPath, { readOnly: true });
 
   return db;
 }
@@ -110,20 +113,35 @@ export function searchMethods(version: string, query: string, limit: number = 50
   }));
 }
 
+let _sqliteWarningShown = false;
+
 export function getCallgraphStats(version: string): { totalCalls: number; uniqueCallers: number; uniqueCallees: number } | null {
   const dbPath = path.join(getCallgraphDir(version), 'callgraph.db');
-  
+
   if (!fs.existsSync(dbPath)) {
     return null;
   }
-  
+
+  // Degrade gracefully on Node <22.5: the DB file exists but we can't open
+  // it. Show one stderr line so the user knows why stats are missing, then
+  // return null so cli.js status keeps printing the rest of the version
+  // info.
+  const probe = isSqliteAvailable();
+  if (!probe.ok) {
+    if (!_sqliteWarningShown) {
+      _sqliteWarningShown = true;
+      console.error(`(callgraph stats unavailable: ${probe.error})`);
+    }
+    return null;
+  }
+
   const database = openDb(version);
-  
+
   const totalCalls = (database.prepare('SELECT COUNT(*) as count FROM calls').get() as any)?.count || 0;
   const uniqueCallers = (database.prepare('SELECT COUNT(DISTINCT caller_class || caller_method) as count FROM calls').get() as any)?.count || 0;
   const uniqueCallees = (database.prepare('SELECT COUNT(DISTINCT callee_class || callee_method) as count FROM calls').get() as any)?.count || 0;
-  
+
   closeDb();
-  
+
   return { totalCalls, uniqueCallers, uniqueCallees };
 }

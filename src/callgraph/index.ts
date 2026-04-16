@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
-import { DatabaseSync } from 'node:sqlite';
 import { ensureDir, getHomeDir, getMinecraftJarPath } from '../utils/paths.js';
 import { getCallgraphDir, getCallgraphDbPath } from './query.js';
+import { requireSqlite } from './sqlite-loader.js';
 
 const SPECIAL_SOURCE_VERSION = '1.11.4';
 
@@ -164,7 +164,9 @@ export function parseCallgraphAndCreateDb(version: string, callgraphFile: string
   const dbPath = getCallgraphDbPath(version);
   if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
   
-  const db = new DatabaseSync(dbPath);
+  // Lazy-resolve so this module evaluates on Node <22.5 — see sqlite-loader.ts.
+  const DatabaseSyncCtor = requireSqlite();
+  const db = new DatabaseSyncCtor(dbPath);
   db.exec(`CREATE TABLE calls (id INTEGER PRIMARY KEY, caller_class TEXT, caller_method TEXT, caller_desc TEXT, callee_class TEXT, callee_method TEXT, callee_desc TEXT, line_number INTEGER); CREATE INDEX idx_callee ON calls(callee_class, callee_method); CREATE INDEX idx_caller ON calls(caller_class, caller_method);`);
 
   const insert = db.prepare('INSERT INTO calls VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)');

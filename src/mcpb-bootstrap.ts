@@ -19,9 +19,13 @@
 //      the debug log.
 //   2. Log environment info (Node version, NODE_MODULE_VERSION, platform,
 //      arch, argv, cwd).
-//   3. Preflight node:sqlite with a focused try/catch so a missing/gated
-//      built-in gets a clear, actionable error message instead of a silent
-//      crash deep in the import graph.
+//   3. Preflight node:sqlite as a non-fatal probe — log whether the
+//      static-analysis tools will work, but don't kill the server if
+//      sqlite is missing. Runtime tools (mc_connect, mc_execute, ...) work
+//      fine without it. The Claude Desktop MCPB always runs in an Electron
+//      with Node >=22.5, so the preflight nearly always succeeds; the
+//      degraded path matters mostly for users running this server via
+//      npx/npm on a host with older Node.
 //   4. Dynamically import ./cli.js so an error during its module evaluation
 //      is caught here and logged with a stack.
 //
@@ -103,16 +107,18 @@ boot(`MCDEV_MCP_DEBUG_LOG=${DEBUG_LOG_PATH ?? '(off)'}`);
 boot(`env.ELECTRON_RUN_AS_NODE=${process.env.ELECTRON_RUN_AS_NODE ?? '(unset)'}`);
 
 (async () => {
-  // Preflight: load node:sqlite (built-in since 22.5.0 experimental, stable
-  // in 24.0.0) so a missing/gated module shows up with a clear message
-  // instead of a silent crash buried inside the transitive import graph.
+  // Preflight: probe node:sqlite (built-in since 22.5.0 experimental, stable
+  // in 24.0.0). Non-fatal — the server still comes up if sqlite is missing,
+  // and runtime tools (mc_connect, mc_execute, ...) keep working. Only the
+  // static-analysis tools that touch the callgraph database will surface a
+  // clear runtime error when invoked.
   //
   // We used to ship better-sqlite3 here, and it bit us hard: its native
   // binding is pinned to NODE_MODULE_VERSION, Claude Desktop bumps Electron
   // (and thus NODE_MODULE_VERSION) on its own schedule, and macOS Team ID
   // checks made cross-host loads non-portable. Switching to the built-in
   // eliminates the entire ABI-pinning class of failure.
-  boot('preflight: importing node:sqlite built-in...');
+  boot('preflight: probing node:sqlite built-in...');
   try {
     const { DatabaseSync } = await import('node:sqlite');
     const probe = new DatabaseSync(':memory:');
@@ -120,15 +126,15 @@ boot(`env.ELECTRON_RUN_AS_NODE=${process.env.ELECTRON_RUN_AS_NODE ?? '(unset)'}`
     boot(`preflight: node:sqlite OK — sqlite_version=${row?.v ?? '(null)'}`);
     probe.close();
   } catch (err) {
-    const msg = err instanceof Error ? (err.stack ?? err.message) : String(err);
-    boot(`FATAL: failed to load node:sqlite built-in`);
-    boot(msg);
+    const msg = err instanceof Error ? err.message : String(err);
+    boot(`preflight: node:sqlite UNAVAILABLE — ${msg}`);
     boot(
-      `node:sqlite requires Node >= 22.5.0 (experimental) or >= 24.0.0 (stable). ` +
-      `Current runtime: node=${process.version} modules=${vers.modules}. ` +
-      `If this is Electron, it must embed Node 22.5.0+ with sqlite built in.`
+      `Static-analysis tools (mc_find_refs, callgraph init) will fail with ` +
+      `a clear error when invoked. Runtime tools (mc_connect, mc_execute, ` +
+      `mc_snapshot, mc_screenshot, mc_run_command, mc_logger) will work ` +
+      `normally. To enable the full feature set, run on Node >=22.5.0 ` +
+      `(current: node=${process.version} modules=${vers.modules}).`
     );
-    process.exit(1);
   }
 
   // We bypass cli.ts (and commander) entirely for the `serve` case. Earlier
