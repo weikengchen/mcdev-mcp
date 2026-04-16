@@ -460,7 +460,7 @@ npm run mcpb
 # → dist-mcpb/mcdev-mcp-<version>-<platform>-<arch>.mcpb
 ```
 
-The native [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) binary is platform-specific, which is why each `.mcpb` is built on a matching runner rather than cross-built. macOS users get an arm64 build; Intel Mac support would require adding `macos-13` to the matrix.
+The bundle is pure JavaScript (it uses the built-in [`node:sqlite`](https://nodejs.org/api/sqlite.html) module, so there is no native binary to ship). Builds still run per-platform to exercise the smoke test on each OS and to stamp the platform/arch into the filename; macOS users get an arm64 build, Intel Mac support would require adding `macos-13` to the matrix.
 
 ### Installing the MCPB in Claude Desktop
 

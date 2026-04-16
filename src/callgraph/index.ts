@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import { ensureDir, getHomeDir, getMinecraftJarPath } from '../utils/paths.js';
 import { getCallgraphDir, getCallgraphDbPath } from './query.js';
 
@@ -164,11 +164,22 @@ export function parseCallgraphAndCreateDb(version: string, callgraphFile: string
   const dbPath = getCallgraphDbPath(version);
   if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
   
-  const db = new Database(dbPath);
+  const db = new DatabaseSync(dbPath);
   db.exec(`CREATE TABLE calls (id INTEGER PRIMARY KEY, caller_class TEXT, caller_method TEXT, caller_desc TEXT, callee_class TEXT, callee_method TEXT, callee_desc TEXT, line_number INTEGER); CREATE INDEX idx_callee ON calls(callee_class, callee_method); CREATE INDEX idx_caller ON calls(caller_class, caller_method);`);
-  
+
   const insert = db.prepare('INSERT INTO calls VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)');
-  const insertMany = db.transaction((items: any[][]) => { for (const item of items) insert.run(...item); });
+  // node:sqlite has no db.transaction() helper, so wrap explicitly. Bulk
+  // INSERT without a surrounding transaction is ~1000x slower on SQLite.
+  const insertMany = (items: any[][]) => {
+    db.exec('BEGIN');
+    try {
+      for (const item of items) insert.run(...item);
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+  };
   
   let count = 0;
   const batch: any[][] = [];
@@ -205,7 +216,7 @@ export function parseCallgraphAndCreateDb(version: string, callgraphFile: string
     }
   }
   if (batch.length > 0) { insertMany(batch); count += batch.length; }
-  db.pragma('optimize');
+  db.exec('PRAGMA optimize');
   db.close();
   if (progressCb) progressCb('index', 100, `Indexed ${count} call references.`);
   return count;

@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import { getMinecraftCacheDir } from '../utils/paths.js';
 
 export function getCallgraphDir(version: string): string {
@@ -11,19 +11,19 @@ export function getCallgraphDbPath(version: string): string {
   return path.join(getCallgraphDir(version), 'callgraph.db');
 }
 
-let db: any = null;
+let db: DatabaseSync | null = null;
 
-export function openDb(version: string): any {
+export function openDb(version: string): DatabaseSync {
   if (db) return db;
-  
+
   const dbPath = path.join(getCallgraphDir(version), 'callgraph.db');
-  
+
   if (!fs.existsSync(dbPath)) {
     throw new Error('Callgraph database not found. Run `mcdev-mcp callgraph` first.');
   }
-  
-  db = new Database(dbPath, { readonly: true });
-  
+
+  db = new DatabaseSync(dbPath, { readOnly: true });
+
   return db;
 }
 

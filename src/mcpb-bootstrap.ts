@@ -19,8 +19,9 @@
 //      the debug log.
 //   2. Log environment info (Node version, NODE_MODULE_VERSION, platform,
 //      arch, argv, cwd).
-//   3. Preflight the native binding (better-sqlite3) with a focused try/catch
-//      so its failure mode gets a clear, actionable error message.
+//   3. Preflight node:sqlite with a focused try/catch so a missing/gated
+//      built-in gets a clear, actionable error message instead of a silent
+//      crash deep in the import graph.
 //   4. Dynamically import ./cli.js so an error during its module evaluation
 //      is caught here and logged with a stack.
 //
@@ -102,28 +103,30 @@ boot(`MCDEV_MCP_DEBUG_LOG=${DEBUG_LOG_PATH ?? '(off)'}`);
 boot(`env.ELECTRON_RUN_AS_NODE=${process.env.ELECTRON_RUN_AS_NODE ?? '(unset)'}`);
 
 (async () => {
-  // Preflight: load better-sqlite3 explicitly so ABI mismatches show up with
-  // a clear message pointing at the native module, instead of a silent crash
-  // buried inside the transitive import graph.
-  boot('preflight: importing better-sqlite3 native binding...');
+  // Preflight: load node:sqlite (built-in since 22.5.0 experimental, stable
+  // in 24.0.0) so a missing/gated module shows up with a clear message
+  // instead of a silent crash buried inside the transitive import graph.
+  //
+  // We used to ship better-sqlite3 here, and it bit us hard: its native
+  // binding is pinned to NODE_MODULE_VERSION, Claude Desktop bumps Electron
+  // (and thus NODE_MODULE_VERSION) on its own schedule, and macOS Team ID
+  // checks made cross-host loads non-portable. Switching to the built-in
+  // eliminates the entire ABI-pinning class of failure.
+  boot('preflight: importing node:sqlite built-in...');
   try {
-    const mod = await import('better-sqlite3');
-    const DatabaseCtor = (mod.default ?? (mod as unknown)) as new (
-      filename: string,
-      options?: Record<string, unknown>
-    ) => { prepare(sql: string): { get(): unknown }; close(): void };
-    const probe = new DatabaseCtor(':memory:');
+    const { DatabaseSync } = await import('node:sqlite');
+    const probe = new DatabaseSync(':memory:');
     const row = probe.prepare('select sqlite_version() as v').get() as { v?: string };
-    boot(`preflight: better-sqlite3 OK — sqlite_version=${row?.v ?? '(null)'}`);
+    boot(`preflight: node:sqlite OK — sqlite_version=${row?.v ?? '(null)'}`);
     probe.close();
   } catch (err) {
     const msg = err instanceof Error ? (err.stack ?? err.message) : String(err);
-    boot(`FATAL: failed to load better-sqlite3 native binding`);
+    boot(`FATAL: failed to load node:sqlite built-in`);
     boot(msg);
     boot(
-      `This almost always means the shipped .node file was ` +
-      `built for a different NODE_MODULE_VERSION than the current runtime ` +
-      `(current=${vers.modules}). Rebuild the MCPB with a matching prebuild.`
+      `node:sqlite requires Node >= 22.5.0 (experimental) or >= 24.0.0 (stable). ` +
+      `Current runtime: node=${process.version} modules=${vers.modules}. ` +
+      `If this is Electron, it must embed Node 22.5.0+ with sqlite built in.`
     );
     process.exit(1);
   }

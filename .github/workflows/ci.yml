@@ -13,7 +13,9 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 22.x]
+        # node:sqlite is experimental in 22.5+ and stable in 24. We don't
+        # support older Node anymore — the built-in is a hard requirement.
+        node-version: [22.x, 24.x]
 
     steps:
       - name: Checkout repository
@@ -40,7 +42,7 @@ jobs:
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
-        if: matrix.node-version == '20.x'
+        if: matrix.node-version == '22.x'
         with:
           name: dist
           path: dist/
@@ -56,7 +58,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '22.x'
 
       - name: Install dependencies
         run: npm install
@@ -64,10 +66,14 @@ jobs:
       - name: Check TypeScript
         run: npx tsc --noEmit
 
-  # Build the MCPB (Claude Desktop extension) bundle for each supported
-  # platform. Runs on tag pushes only — wasted CI minutes otherwise.
-  # Each runner produces a platform-specific .mcpb because better-sqlite3
-  # ships a native binary that can't be cross-built.
+  # Build the MCPB (Claude Desktop extension) bundle. Runs on tag pushes
+  # only — wasted CI minutes otherwise.
+  #
+  # We still build per-platform even though node:sqlite has no native
+  # binary, because the bundle's filename and smoke test still encode
+  # platform/arch via process.platform/process.arch. Consolidating to a
+  # single cross-platform bundle is a follow-up; leaving it alone here
+  # keeps the release format identical to previous versions.
   mcpb:
     needs: [build, lint]
     if: startsWith(github.ref, 'refs/tags/v')
@@ -87,7 +93,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '22.x'
 
       - name: Install dependencies
         run: npm install --no-fund --no-audit
@@ -121,7 +127,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '22.x'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies

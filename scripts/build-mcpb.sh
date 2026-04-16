@@ -13,8 +13,12 @@
 #
 # Why a staging dir? mcpb pack zips the directory you point it at. If we
 # pointed it at the repo root, we'd ship dev dependencies (jest, ts-jest,
-# typescript, etc.), src/, tests/, docs/, .github/, and the host's
-# better-sqlite3 build cache. Staging gives us a clean, prod-only tree.
+# typescript, etc.), src/, tests/, docs/, and .github/. Staging gives us a
+# clean, prod-only tree.
+#
+# Note: we use the built-in node:sqlite module, so there are no native
+# dependencies to ship. Earlier versions of this script pinned better-sqlite3
+# prebuilds to a specific Electron ABI; that whole mechanism is gone now.
 
 set -euo pipefail
 
@@ -62,35 +66,32 @@ cp manifest.json package.json "$STAGE/"
 cp -R dist "$STAGE/dist"
 
 echo ">> Installing production dependencies into staging dir..."
-# --ignore-scripts=false is the default — we WANT prebuild-install to fetch
-# the better-sqlite3 native binary for this platform.
-#
-# We also --build-from-source=false (the default) so npm just drops whatever
-# prebuild-install picks in place. That pick is based on the BUILDING node's
-# ABI, which is usually NOT what we want — see the re-download below.
+# No native deps remain — node:sqlite is a built-in. This is now a
+# pure-JavaScript install.
 (
   cd "$STAGE"
   npm install --omit=dev --no-fund --no-audit --loglevel=error
 )
 
 # ---------------------------------------------------------------------------
-# Smoke test the bootstrap BEFORE we swap in the Electron-ABI native binary.
+# Smoke test the bootstrap.
 #
-# At this point the stage has the host-Node-ABI better-sqlite3 binary from
-# `npm install` above, so we can actually run the compiled bootstrap on the
-# build host's `node` and see it come up. This catches the classes of failure
-# that bit us during the bisect:
+# We run the compiled bootstrap on the build host's `node` and watch for the
+# success breadcrumb. This catches the classes of failure that bit us during
+# the bisect:
 #
 #   - dist/mcpb-bootstrap.js missing or broken (tsc didn't emit it)
 #   - a top-level import crash somewhere in the ./index.js module graph
 #   - the server.connect(transport) path never resolving
 #   - an async EPIPE-style crash with no stderr output
 #
-# It does NOT catch the Electron-ABI issue (that's what the post-download
-# file-existence check below is for), and it does NOT catch Node-24-specific
-# bugs when the host happens to be Node 20. For the bugs it does catch, it
-# fails the build loudly instead of shipping a bundle that silently dies when
-# a user installs it.
+# It does NOT catch Node-version-specific bugs when the host happens to run a
+# different Node than Claude Desktop's embedded Electron. For the bugs it
+# does catch, it fails the build loudly instead of shipping a bundle that
+# silently dies when a user installs it.
+#
+# node:sqlite requires Node >= 22.5.0; the build host must meet that too or
+# the preflight will fail here.
 #
 # How it works:
 #   1. Run `node dist/mcpb-bootstrap.js serve` in the background with
@@ -105,8 +106,7 @@ echo ">> Installing production dependencies into staging dir..."
 # once we've seen it reach that state.
 #
 # Skippable via MCDEV_MCP_SKIP_SMOKE=1 for cases where the build host cannot
-# run Node (e.g. cross-compiling on a CI arch that doesn't ship a node-v<abi>
-# prebuild for better-sqlite3).
+# run Node 22.5+.
 # ---------------------------------------------------------------------------
 if [[ "${MCDEV_MCP_SKIP_SMOKE:-0}" == "1" ]]; then
   echo ">> Smoke test skipped (MCDEV_MCP_SKIP_SMOKE=1)"
@@ -167,69 +167,11 @@ else
   echo ">> Smoke test passed: bootstrap reached 'connected, ready for requests'"
 fi
 
-# ---------------------------------------------------------------------------
-# Re-download better-sqlite3 for the Electron runtime that Claude Desktop
-# uses.
-#
-# Why this matters: Claude Desktop runs MCP servers with its own bundled
-# Node runtime (Electron's embedded Node, not the host's `node`). better-
-# sqlite3 12.x is NOT NAPI-based — it uses V8 directly and is locked to a
-# specific NODE_MODULE_VERSION. If the host dev machine has Node 20
-# (ABI 115), `npm install` drops a binary built for ABI 115, and Claude
-# Desktop (Electron 40 → ABI 143) will fail to load it with "NODE_MODULE_
-# VERSION mismatch" — or, worse, silently exit before any stderr lands in
-# the MCP client log.
-#
-# better-sqlite3 publishes per-runtime prebuilds on its GitHub releases:
-#   better-sqlite3-v<ver>-electron-v<abi>-<platform>-<arch>.tar.gz
-#   better-sqlite3-v<ver>-node-v<abi>-<platform>-<arch>.tar.gz
-#
-# prebuild-install knows how to fetch these when given --runtime and
-# --target. We target the specific Electron version that Claude Desktop
-# ships today so the MCPB is guaranteed to load. If Claude Desktop upgrades
-# Electron, this script will need a matching bump (detection logic could
-# be added later; keeping it explicit for now).
-#
-# MCDEV_MCP_ELECTRON_TARGET lets CI / contributors override the target
-# without editing this script.
-# ---------------------------------------------------------------------------
-ELECTRON_TARGET="${MCDEV_MCP_ELECTRON_TARGET:-40.0.0}"
-echo ">> Re-downloading better-sqlite3 binary for Electron ${ELECTRON_TARGET}..."
-(
-  cd "$STAGE/node_modules/better-sqlite3"
-  # Wipe the existing build/Release so prebuild-install doesn't skip.
-  rm -rf build/Release
-  # prebuild-install exits non-zero if no prebuild matches; let that fail
-  # loudly rather than silently shipping the wrong ABI.
-  "$REPO_ROOT/node_modules/.bin/prebuild-install" \
-    --runtime=electron \
-    --target="$ELECTRON_TARGET" \
-    --platform="$RAW_PLATFORM" \
-    --arch="$ARCH" \
-    --force \
-    --verbose
-)
-
-# Sanity check: the native binding should exist after the re-download.
-NATIVE="$STAGE/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
-if [[ ! -f "$NATIVE" ]]; then
-  echo "!! FATAL: $NATIVE not found after prebuild-install."
-  echo "!! Check that an electron-v<ABI>-${RAW_PLATFORM}-${ARCH} prebuild exists"
-  echo "!! for better-sqlite3 (see https://github.com/WiseLibs/better-sqlite3/releases)."
-  exit 1
-fi
-echo ">> Native binding in place: $(file "$NATIVE" | sed 's|'"$STAGE"'/||')"
-
-# Strip prebuilds for OTHER platforms from better-sqlite3 to keep the bundle
-# small. Each prebuild is ~2MB and there are ~10 of them. (prebuild-install
-# may also drop a prebuilds/ tree in some cases.)
-PREBUILDS_DIR="$STAGE/node_modules/better-sqlite3/prebuilds"
-if [[ -d "$PREBUILDS_DIR" ]]; then
-  KEEP_DIR="${RAW_PLATFORM}-${ARCH}"
-  echo ">> Pruning prebuilds in $PREBUILDS_DIR (keeping $KEEP_DIR)..."
-  find "$PREBUILDS_DIR" -mindepth 1 -maxdepth 1 -type d \
-    ! -name "$KEEP_DIR" -exec rm -rf {} +
-fi
+# Native-binary re-download and prebuild-pruning blocks used to live here.
+# They're gone now that we use the built-in node:sqlite — there is no .node
+# file to ship, and therefore no ABI mismatch or Team-ID dlopen failure to
+# worry about. The whole class of "Claude Desktop bumped Electron, our MCPB
+# silently died on load" bugs disappears.
 
 echo ">> Packing $OUTPUT..."
 "$MCPB" pack "$STAGE" "$OUTPUT"
