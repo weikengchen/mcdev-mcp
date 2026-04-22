@@ -9,7 +9,7 @@ An **MCP (Model Context Protocol) server** that empowers AI coding agents to wor
 
 ### Static Analysis (work offline)
 - **Decompiled Source Access** — Auto-downloads and decompiles Minecraft client using [Vineflower](https://github.com/Vineflower/vineflower)
-- **Dev Snapshot Support** — Works with development snapshots (e.g., `26.1-snapshot-10`) that lack ProGuard mappings
+- **Dev Snapshot Support** — Works with development snapshots (e.g., `26.2-snapshot-4`, `26w14a`) that lack ProGuard mappings
 - **Symbol Search** — Search for classes, methods, and fields by name (`mc_search`)
 - **Source Retrieval** — Get full class source or individual methods with context
 - **Package Exploration** — List all classes under a package path or discover available packages
@@ -22,6 +22,7 @@ An **MCP (Model Context Protocol) server** that empowers AI coding agents to wor
 - **Screenshots** — Capture the game window as JPEG (`mc_screenshot`)
 - **Slash Commands** — Execute in-game commands (`mc_run_command`)
 - **Runtime Method Tracing** — Inject loggers into methods to trace calls (`mc_logger`)
+- **Runtime Entity/Inventory Inspection** — Query entities, inspect equipment, render item icons, and toggle client-side glow
 
 ## Quick Start
 
@@ -61,7 +62,7 @@ The `serve` subcommand starts the MCP server over stdio. Your MCP client (Claude
 
 | Version Type | Example | Notes |
 |--------------|---------|-------|
-| Dev snapshots | `26.1-snapshot-10` | Already unobfuscated, no mappings needed |
+| Dev snapshots | `26.2-snapshot-4`, `26w14a` | Already unobfuscated, no mappings needed |
 | Release (>= 1.21.11) | `1.21.11` | Uses pre-unobfuscated JAR when available |
 | Old versions | `< 1.21.11` | Not supported |
 
@@ -258,7 +259,8 @@ Capture the game window as a JPEG file and return its path.
 ```json
 {
   "downscale": 2,
-  "quality": 0.75
+  "quality": 0.75,
+  "timeoutMs": 5000
 }
 ```
 
@@ -270,6 +272,8 @@ Execute a Minecraft slash command.
   "command": "/give @s minecraft:diamond 64"
 }
 ```
+
+If the DebugBridge `runCommand` endpoint fails on a newer snapshot because the client connection API changed, mcdev-mcp retries through `mc_execute` using a field-first connection lookup.
 
 ### `mc_logger`
 Manage runtime method loggers for tracing Minecraft method calls. Uses Java Agent instrumentation to capture method entry/exit, arguments, return values, and timing.
@@ -302,6 +306,88 @@ List active loggers:
 ```
 
 > **Note:** This modifies bytecode at runtime. Avoid targeting hot-path methods. Optional filters (`throttle`, `arg_contains`, `arg_instanceof`, `sample`) can reduce log volume.
+
+### `mc_search_runtime`
+Search the live DebugBridge runtime resolver for classes, methods, or fields. Use this when connected to a running client and you want runtime names from the active DebugBridge mapping resolver.
+
+```json
+{
+  "pattern": "Minecraft",
+  "scope": "class"
+}
+```
+
+`scope` is optional and can be `all`, `class`, `method`, or `field`.
+
+### `mc_get_item_texture`
+Render an item from the player's inventory by slot and return PNG data.
+
+```json
+{
+  "slot": 0
+}
+```
+
+The result contains `base64Png`, `dataUri`, `width`, `height`, and `spriteName`.
+
+### `mc_get_item_texture_by_id`
+Render an item by registry id and return PNG data.
+
+```json
+{
+  "itemId": "minecraft:diamond_sword"
+}
+```
+
+### `mc_get_entity_item_texture`
+Render an equipped item from an entity by runtime entity id and equipment slot.
+
+```json
+{
+  "entityId": 12,
+  "slot": "mainhand"
+}
+```
+
+Typical slots are `mainhand`, `offhand`, `head`, `chest`, `legs`, and `feet`.
+
+### `mc_nearby_entities`
+List nearby entities from the running client.
+
+```json
+{
+  "range": 64,
+  "limit": 100
+}
+```
+
+### `mc_entity_details`
+Get detailed data for a runtime entity id returned by `mc_nearby_entities` or `mc_looked_at_entity`.
+
+```json
+{
+  "entityId": 12
+}
+```
+
+### `mc_looked_at_entity`
+Return the runtime entity id currently under the player's crosshair, if any.
+
+```json
+{
+  "range": 64
+}
+```
+
+### `mc_set_entity_glow`
+Toggle client-side glow for a runtime entity id.
+
+```json
+{
+  "entityId": 12,
+  "glow": true
+}
+```
 
 ## Requirements
 

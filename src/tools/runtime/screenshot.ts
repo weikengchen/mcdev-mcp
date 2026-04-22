@@ -26,15 +26,20 @@ path to be readable here.`,
                 type: "number",
                 description: "JPEG quality in [0.05, 1.0]. Default: 0.75.",
             },
+            timeoutMs: {
+                type: "number",
+                description: "Capture timeout in milliseconds. DebugBridge enforces a minimum of 100ms. Default: 5000.",
+            },
         },
         required: [],
     },
 
-    handler: async (args: { downscale?: number; quality?: number }) => {
+    handler: async (args: { downscale?: number; quality?: number; timeoutMs?: number }) => {
         try {
             const payload: Record<string, unknown> = {};
             if (args.downscale !== undefined) payload.downscale = args.downscale;
             if (args.quality !== undefined) payload.quality = args.quality;
+            if (args.timeoutMs !== undefined) payload.timeoutMs = args.timeoutMs;
             const resp = await bridgeSession.send("screenshot", payload);
             if (!resp.success) {
                 return { content: [{ type: "text" as const, text: `Error: ${resp.error}` }], isError: true };

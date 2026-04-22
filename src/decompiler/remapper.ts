@@ -22,8 +22,9 @@ export function getTinyMappingsPath(version: string): string {
 }
 
 export function needsRemapping(version: string): boolean {
-  // Dev snapshots (26.x+) are already unobfuscated
+  // Dev snapshots/new-version snapshots (26.x+, 26wNNa+) are already unobfuscated
   if (/^[2-9][0-9]*\./.test(version)) return false;
+  if (/^[2-9][0-9]*w[0-9]{2}[a-z]$/.test(version)) return false;
   // Versions with known unobfuscated JARs
   if (hasUnobfuscatedJar(version)) return false;
   // Everything else needs remapping

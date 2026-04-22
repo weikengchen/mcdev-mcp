@@ -1,6 +1,22 @@
 export interface BridgeRequest {
     id: string;
-    type: "execute" | "search" | "snapshot" | "screenshot" | "runCommand" | "status" | "injectLogger" | "cancelLogger" | "listLoggers";
+    type:
+        | "execute"
+        | "search"
+        | "snapshot"
+        | "screenshot"
+        | "runCommand"
+        | "status"
+        | "getItemTexture"
+        | "getEntityItemTexture"
+        | "getItemTextureById"
+        | "nearbyEntities"
+        | "entityDetails"
+        | "lookedAtEntity"
+        | "setEntityGlow"
+        | "injectLogger"
+        | "cancelLogger"
+        | "listLoggers";
     payload: Record<string, unknown>;
 }
 
