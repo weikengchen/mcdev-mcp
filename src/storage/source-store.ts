@@ -174,7 +174,7 @@ export class SourceStore {
   ): void {
     for (const [className, classInfo] of Object.entries(pkgIndex.classes)) {
       const fullName = `${packageName}.${className}`;
-      
+
       if (!type || type === 'class') {
         if (className.toLowerCase().includes(queryLower)) {
           results.push({
@@ -182,10 +182,15 @@ export class SourceStore {
             className: fullName,
             name: className,
             sourcePath: this.resolveSourcePath(classInfo.sourcePath, namespace),
+            kind: classInfo.kind,
+            superClass: classInfo.super,
+            interfaces: classInfo.interfaces,
+            fieldCount: classInfo.fields.length,
+            methodCount: classInfo.methods.length,
           });
         }
       }
-      
+
       if (!type || type === 'field') {
         for (const field of classInfo.fields) {
           if (field.name.toLowerCase().includes(queryLower)) {
@@ -195,11 +200,12 @@ export class SourceStore {
               name: field.name,
               signature: `${field.type} ${field.name}`,
               sourcePath: this.resolveSourcePath(classInfo.sourcePath, namespace),
+              modifiers: field.modifiers,
             });
           }
         }
       }
-      
+
       if (!type || type === 'method') {
         for (const method of classInfo.methods) {
           if (method.name.toLowerCase().includes(queryLower)) {
@@ -210,6 +216,7 @@ export class SourceStore {
               signature: this.formatMethodSignature(method),
               sourcePath: this.resolveSourcePath(classInfo.sourcePath, namespace),
               lineStart: method.lineStart,
+              modifiers: method.modifiers,
             });
           }
         }

@@ -83,4 +83,15 @@ export interface SearchResult {
   signature?: string;
   sourcePath: string;
   lineStart?: number;
+  /** Class kind for class hits (class/interface/enum/record). */
+  kind?: ClassKind;
+  /** Direct superclass for class hits (null for Object/interfaces). */
+  superClass?: string | null;
+  /** Implemented interfaces for class hits. */
+  interfaces?: string[];
+  /** Counts for class hits — "(13 fields, 247 methods)" inline. */
+  fieldCount?: number;
+  methodCount?: number;
+  /** Modifiers for method/field hits — public/private/static/final/etc. */
+  modifiers?: string[];
 }
