@@ -7,19 +7,26 @@ seen in the chat overlay, including system messages and command output.
 
 Prefer this over walking gui:getChat().allMessages from Lua (which costs
 one bridge round-trip per field on each message). Returns {plain, addedTime}
-per message, newest-first.`,
+per message, newest-first. Set includeJson=true to also receive each message
+as a structured Component (preserves colors, styles, click events, hover
+events) — handy for parsing colored command output.`,
     inputSchema: {
         type: "object" as const,
         properties: {
             limit: { type: "number", description: "Max messages returned. Default 50." },
+            includeJson: {
+                type: "boolean",
+                description: "Include the Component as JSON for each message. Default false.",
+            },
         },
         required: [],
     },
 
-    handler: async (args: { limit?: number }) => {
+    handler: async (args: { limit?: number; includeJson?: boolean }) => {
         try {
             const payload: Record<string, unknown> = {};
             if (args.limit !== undefined) payload.limit = args.limit;
+            if (args.includeJson !== undefined) payload.includeJson = args.includeJson;
             const resp = await bridgeSession.send("chatHistory", payload);
             if (!resp.success) {
                 return { content: [{ type: "text" as const, text: `Error: ${resp.error}` }], isError: true };
