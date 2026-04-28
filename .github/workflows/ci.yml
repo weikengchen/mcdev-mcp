@@ -66,6 +66,23 @@ jobs:
       - name: Check TypeScript
         run: npx tsc --noEmit
 
+  # Sanity-check that the pushed tag matches the versions baked into
+  # package.json and manifest.json. Cheap fail-fast before the matrix
+  # runs three platform builds with a wrong filename, or npm publishes
+  # a version that disagrees with the tag.
+  verify-version:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify package.json + manifest.json match tag
+        run: |
+          PKG="$(node -p 'require("./package.json").version')"
+          MAN="$(node -p 'require("./manifest.json").version')"
+          TAG="${GITHUB_REF_NAME#v}"
+          [ "$PKG" = "$TAG" ] || { echo "package.json $PKG != tag $TAG"; exit 1; }
+          [ "$MAN" = "$TAG" ] || { echo "manifest.json $MAN != tag $TAG"; exit 1; }
+
   # Build the MCPB (Claude Desktop extension) bundle. Runs on tag pushes
   # only — wasted CI minutes otherwise.
   #
@@ -75,7 +92,7 @@ jobs:
   # single cross-platform bundle is a follow-up; leaving it alone here
   # keeps the release format identical to previous versions.
   mcpb:
-    needs: [build, lint]
+    needs: [build, lint, verify-version]
     if: startsWith(github.ref, 'refs/tags/v')
     strategy:
       fail-fast: false
@@ -114,7 +131,7 @@ jobs:
   # with all platform MCPB bundles attached. Triggered by `git push --tags`
   # of a `v*` tag. Requires the NPM_TOKEN secret to be set in repo settings.
   release:
-    needs: [build, lint, mcpb]
+    needs: [build, lint, verify-version, mcpb]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
