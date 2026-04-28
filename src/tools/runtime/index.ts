@@ -14,8 +14,8 @@ import { mcRunCommandTool } from './command.js';
 import { mcLoggerTool } from './logger.js';
 import { mcScriptLogsTool } from './script-logs.js';
 
-// Dev-only tools (enabled via MCDEV_SCRIPT_LOGS=1)
-const devToolsEnabled = process.env.MCDEV_SCRIPT_LOGS === '1';
+// Dev-only tools (enabled via MCDEV_SCRIPT_LOGS=1 or =true)
+const devToolsEnabled = /^(1|true)$/i.test(process.env.MCDEV_SCRIPT_LOGS ?? '');
 
 export const runtimeTools = [
     mcConnectTool,

@@ -1,7 +1,7 @@
 import { bridgeSession } from "./session.js";
 import { scriptLogger } from "./script-logger.js";
 
-const scriptLogsEnabled = process.env.MCDEV_SCRIPT_LOGS === '1';
+const scriptLogsEnabled = /^(1|true)$/i.test(process.env.MCDEV_SCRIPT_LOGS ?? '');
 
 export const mcExecuteTool = {
     name: "mc_execute",

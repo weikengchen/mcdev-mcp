@@ -36,7 +36,18 @@
         "${__dirname}/dist/mcpb-bootstrap.js",
         "serve"
       ],
-      "env": {}
+      "env": {
+        "MCDEV_SCRIPT_LOGS": "${user_config.enable_script_logging}"
+      }
+    }
+  },
+  "user_config": {
+    "enable_script_logging": {
+      "type": "boolean",
+      "title": "Log script executions",
+      "description": "Append every mc_execute call (timestamp, code, result, error, duration) to ~/Library/Application Support/mcdev-mcp/script-logs/ (or the platform equivalent). Also enables the mc_script_logs tool for reviewing logs from inside Claude.",
+      "default": false,
+      "required": false
     }
   },
   "tools": [
