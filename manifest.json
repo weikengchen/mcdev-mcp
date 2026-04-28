@@ -3,7 +3,7 @@
   "manifest_version": "0.4",
   "name": "mcdev-mcp",
   "display_name": "Minecraft Dev MCP",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MCP server for Minecraft mod development - decompiled code access, symbol search, and runtime interaction via DebugBridge",
   "long_description": "An MCP server for AI-assisted Minecraft mod development. Static tools provide access to decompiled Minecraft source code: browse classes and methods, search symbols, explore package hierarchies, find subclasses/implementors, and trace callers/callees across multiple Minecraft versions. Runtime tools interact with a running Minecraft instance through the DebugBridge mod: execute Lua inside the JVM, capture game state snapshots and screenshots, run slash commands, and inject runtime method loggers.",
   "author": {
