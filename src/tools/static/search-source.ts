@@ -3,7 +3,15 @@ import { getEffectiveVersion, ensureSourceStoreVersion } from './helpers.js';
 
 export const mcSearchTool = {
   name: 'mc_search',
-  description: 'Search decompiled Minecraft or Fabric API source code for classes, methods, or fields by name pattern. Returns matching results with their full names and source locations.',
+  description: `Search decompiled Minecraft or Fabric API source code for classes, methods, or fields by name pattern.
+
+Each hit returns enough context to make follow-up mc_get_class / mc_get_method
+calls unnecessary in trivial cases:
+- class hits: kind (class/interface/record/enum), extends, implements, field/method counts
+- method hits: full signature including modifiers (public/static/etc.) plus line number
+- field hits: full declaration including modifiers and type
+
+Pass type="class"/"method"/"field" to filter; defaults to all three.`,
   inputSchema: {
     type: 'object' as const,
     properties: {
@@ -45,11 +53,18 @@ export const mcSearchTool = {
 
     const output = results.map(r => {
       if (r.type === 'class') {
-        return `[class] ${r.className}`;
+        const ext = r.superClass ? ` extends ${r.superClass}` : '';
+        const impl = r.interfaces && r.interfaces.length
+          ? ` implements ${r.interfaces.slice(0, 3).join(', ')}${r.interfaces.length > 3 ? ` (+${r.interfaces.length - 3})` : ''}`
+          : '';
+        const counts = `(${r.fieldCount ?? 0} fields, ${r.methodCount ?? 0} methods)`;
+        return `[${r.kind ?? 'class'}] ${r.className}${ext}${impl} ${counts}`;
       } else if (r.type === 'method') {
-        return `[method] ${r.className}#${r.name}${r.signature ? `: ${r.signature}` : ''} (line ${r.lineStart})`;
+        const mods = r.modifiers?.length ? r.modifiers.join(' ') + ' ' : '';
+        return `[method] ${r.className}#${r.name}: ${mods}${r.signature ?? r.name} (line ${r.lineStart})`;
       } else {
-        return `[field] ${r.className}#${r.name}${r.signature ? `: ${r.signature}` : ''}`;
+        const mods = r.modifiers?.length ? r.modifiers.join(' ') + ' ' : '';
+        return `[field] ${r.className}#${r.name}: ${mods}${r.signature ?? r.name}`;
       }
     }).join('\n');
 

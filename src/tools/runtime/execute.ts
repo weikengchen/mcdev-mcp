@@ -1,18 +1,29 @@
 import { bridgeSession } from "./session.js";
 import { scriptLogger } from "./script-logger.js";
 
-const scriptLogsEnabled = process.env.MCDEV_SCRIPT_LOGS === '1';
+const scriptLogsEnabled = /^(1|true)$/i.test(process.env.MCDEV_SCRIPT_LOGS ?? '');
 
 export const mcExecuteTool = {
     name: "mc_execute",
     description: `Execute Lua code in the Minecraft session. The Lua environment is persistent - variables and functions defined in earlier calls remain available.
+
+PREFER NATIVE TOOLS WHERE POSSIBLE — they're 10x+ faster and don't time out:
+- Player state (x/y/z/yaw/pitch/look/velocity/vehicle/raycast target/world): mc_snapshot
+- Nearby entities or one entity's details: mc_nearby_entities / mc_entity_details
+- Nearby block entities (signs, chests, etc.): mc_nearby_blocks / mc_block_details
+- Open screen / inventory contents: mc_screen_inspect
+- Recent chat: mc_chat_history
+- Item textures: mc_get_item_texture (by slot or by id)
+Reach for mc_execute when you need to explore the Java API or do something
+the native tools don't cover. Iterating ~100+ entities or slots in Lua will
+time out (per-call Java<->Lua bridge cost).
 
 The "java" global table provides:
 - java.import(className) - import a Minecraft class by Mojang name
 - java.new(class, args...) - create an instance
 - java.typeof(obj) - get the Mojang class name
 - java.cast(obj, className) - view object as a different type
-- java.iter(iterable) - iterate over Java collections
+- java.iter(iterable) - iterate over Java collections (works on JPMS-private types like HashMap.keySet())
 - java.array(collection) - convert to a Lua table
 - java.isNull(obj) - null check
 - java.ref(refId) - retrieve a stored object reference
