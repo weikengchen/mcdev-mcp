@@ -16,6 +16,8 @@ export { mcClearBlockGlowTool } from './clear-block-glow.js';
 export { mcGetItemTextureTool } from './get-item-texture.js';
 export { mcGetEntityItemTextureTool } from './get-entity-item-texture.js';
 export { mcGetItemTextureByIdTool } from './get-item-texture-by-id.js';
+export { mcChatHistoryTool } from './chat-history.js';
+export { mcScreenInspectTool } from './screen-inspect.js';
 
 import { mcConnectTool } from './connect.js';
 import { mcExecuteTool } from './execute.js';
@@ -35,6 +37,8 @@ import { mcClearBlockGlowTool } from './clear-block-glow.js';
 import { mcGetItemTextureTool } from './get-item-texture.js';
 import { mcGetEntityItemTextureTool } from './get-entity-item-texture.js';
 import { mcGetItemTextureByIdTool } from './get-item-texture-by-id.js';
+import { mcChatHistoryTool } from './chat-history.js';
+import { mcScreenInspectTool } from './screen-inspect.js';
 
 const isOn = (v: string | undefined) => /^(1|true)$/i.test(v ?? '');
 
@@ -61,6 +65,8 @@ export const runtimeTools = [
     mcGetItemTextureTool,
     mcGetEntityItemTextureTool,
     mcGetItemTextureByIdTool,
+    mcChatHistoryTool,
+    mcScreenInspectTool,
     // Dev-only tools — default off; flip env on both sides to enable.
     ...(scriptLogsEnabled ? [mcScriptLogsTool] : []),
     ...(loggerInjectionEnabled ? [mcLoggerTool] : []),

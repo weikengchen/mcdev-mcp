@@ -63,7 +63,20 @@ Use reset=true to disconnect and clear state before reconnecting.`,
             };
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
-            return { content: [{ type: "text" as const, text: `Connection failed: ${msg}` }], isError: true };
+            const refused = /ECONNREFUSED|Could not connect/i.test(msg);
+            const portsTried = args.port !== undefined
+                ? [args.port]
+                : Array.from({ length: 10 }, (_, i) => DEFAULT_PORT + i);
+            const structured = {
+                connected: false,
+                action: refused ? "start_minecraft" : "investigate",
+                ports_tried: portsTried,
+                message: refused
+                    ? "DebugBridge mod is not running on any scanned port. Ask the user to launch Minecraft with the DebugBridge mod loaded, then retry mc_connect."
+                    : `Connection failed: ${msg}`,
+                raw_error: msg,
+            };
+            return { content: [{ type: "text" as const, text: JSON.stringify(structured, null, 2) }], isError: true };
         }
     }
 };
