@@ -3,8 +3,8 @@ import { bridgeSession } from "./session.js";
 export const mcGetItemTextureByIdTool = {
     name: "mc_get_item_texture_by_id",
     description: `Render the default texture for an item registry id (e.g.
-"minecraft:diamond_pickaxe"). Returns {base64Png, width, height,
-spriteName}. No inventory slot required.`,
+"minecraft:diamond_pickaxe") as a PNG you can see directly. No inventory
+slot required.`,
     inputSchema: {
         type: "object" as const,
         properties: {
@@ -19,7 +19,13 @@ spriteName}. No inventory slot required.`,
             if (!resp.success) {
                 return { content: [{ type: "text" as const, text: `Error: ${resp.error}` }], isError: true };
             }
-            return { content: [{ type: "text" as const, text: JSON.stringify(resp.result, null, 2) }] };
+            const r = resp.result as { base64Png: string; width: number; height: number; spriteName: string };
+            return {
+                content: [
+                    { type: "image" as const, data: r.base64Png, mimeType: "image/png" },
+                    { type: "text" as const, text: `${r.width}x${r.height} sprite=${r.spriteName}` },
+                ],
+            };
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
             return { content: [{ type: "text" as const, text: msg }], isError: true };
