@@ -18,6 +18,18 @@ Reach for mc_execute when you need to explore the Java API or do something
 the native tools don't cover. Iterating ~100+ entities or slots in Lua will
 time out (per-call Java<->Lua bridge cost).
 
+timeoutMs: optional per-call deadline in ms (default 10000, max 300000 = 5 min).
+Bump it for bulk reflection over many entities/slots or heavy file I/O. A native
+tool (mc_nearby_entities, mc_entity_details, mc_screen_inspect, etc.) is almost
+always faster than just raising the timeout — try those first.
+
+File I/O is allowed: Lua's io.* is in scope (e.g. io.open(path, "w"):write(json):close()),
+and java.import("java.io.*") / java.import("java.nio.file.*") work too — useful for
+dumping JSON/CSV/screenshots to disk.
+
+Wall clock / env: os is NOT available. Use java.import("java.lang.System"):currentTimeMillis()
+(or :nanoTime()) for timing, and System:getenv(name) / System:getProperty(name) for env vars.
+
 The "java" global table provides:
 - java.import(className) - import a Minecraft class by Mojang name
 - java.new(class, args...) - create an instance
@@ -45,14 +57,20 @@ Use "return <value>" to get a value back. Use print() for debug output.`,
                 type: "string",
                 description: "Lua code to execute",
             },
+            timeoutMs: {
+                type: "integer",
+                description: "Optional per-call execution deadline in milliseconds. Range 1000-300000, default 10000 (10s). Use a longer value for bulk reflection or heavy file I/O.",
+                minimum: 1000,
+                maximum: 300000,
+            },
         },
         required: ["code"],
     },
 
-    handler: async (args: { code: string }) => {
+    handler: async (args: { code: string; timeoutMs?: number }) => {
         const startTime = Date.now();
         try {
-            const resp = await bridgeSession.send("execute", { code: args.code });
+            const resp = await bridgeSession.send("execute", { code: args.code, timeoutMs: args.timeoutMs }, args.timeoutMs);
             const duration_ms = Date.now() - startTime;
 
             // Log the execution (dev mode only)

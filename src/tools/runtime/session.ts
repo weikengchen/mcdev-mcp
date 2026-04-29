@@ -147,19 +147,20 @@ export class BridgeSession {
         });
     }
 
-    async send(type: string, payload: Record<string, unknown>): Promise<BridgeResponse> {
+    async send(type: string, payload: Record<string, unknown>, timeoutMs?: number): Promise<BridgeResponse> {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
             await this.connect();
         }
 
         const id = `req_${++this.requestCounter}`;
         const req: BridgeRequest = { id, type: type as BridgeRequest["type"], payload };
+        const deadlineMs = timeoutMs && timeoutMs > 0 ? timeoutMs + 5000 : 10000;
 
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 this.pendingRequests.delete(id);
-                reject(new Error("Request timed out (10s). The game may be frozen or the Lua script may be in an infinite loop."));
-            }, 10000);
+                reject(new Error(`Request timed out (${deadlineMs}ms). The game may be frozen or the Lua script may be in an infinite loop.`));
+            }, deadlineMs);
 
             this.pendingRequests.set(id, {
                 resolve: (resp) => { clearTimeout(timeout); resolve(resp); },
